@@ -1,4 +1,3 @@
-# components/forms.py
 import streamlit as st
 from datetime import datetime
 from config.settings import Config
@@ -8,13 +7,10 @@ from components.layout import render_header
 
 def render_prediction_form():
     """Renderizar formulario de predicción mejorado"""
-    # Header
     render_header(
         f"🚚 {Config.APP_TITLE}",
         "Sistema inteligente de predicción de entregas para Liverpool"
     )
-
-    # Contenedor principal con mejor diseño
     st.markdown("""
     <div style='
         max-width: 800px;
@@ -22,8 +18,6 @@ def render_prediction_form():
         padding: 0 1rem;
     '>
     """, unsafe_allow_html=True)
-
-    # Formulario principal con diseño mejorado
     with st.container():
         st.markdown("""
         <div style='
@@ -35,8 +29,6 @@ def render_prediction_form():
             margin: 2rem 0;
         '>
         """, unsafe_allow_html=True)
-
-        # Título del formulario
         st.markdown("""
         <div style='text-align: center; margin-bottom: 3rem;'>
             <div style='
@@ -61,12 +53,9 @@ def render_prediction_form():
             </p>
         </div>
         """, unsafe_allow_html=True)
-
-        # Campos del formulario en grid responsivo
         col1, col2 = st.columns(2, gap="large")
 
         with col1:
-            # Destino
             st.markdown("""
             <div style='margin-bottom: 2rem;'>
                 <h4 style='
@@ -93,8 +82,6 @@ def render_prediction_form():
                 placeholder="76000",
                 label_visibility="collapsed"
             )
-
-            # Producto
             st.markdown("""
             <div style='margin-bottom: 2rem; margin-top: 2rem;'>
                 <h4 style='
@@ -123,7 +110,6 @@ def render_prediction_form():
             )
 
         with col2:
-            # Cantidad
             st.markdown("""
             <div style='margin-bottom: 2rem;'>
                 <h4 style='
@@ -151,8 +137,6 @@ def render_prediction_form():
                 help="Cantidad de productos (máximo 100)",
                 label_visibility="collapsed"
             )
-
-            # Fecha y hora
             st.markdown("""
             <div style='margin-bottom: 2rem; margin-top: 2rem;'>
                 <h4 style='
@@ -177,7 +161,7 @@ def render_prediction_form():
             with col_fecha:
                 fecha_compra = st.date_input(
                     "Fecha",
-                    value=datetime.now().date(),  # Valor por defecto
+                    value=datetime.now().date(),
                     min_value=datetime.now().date() - timedelta(days=365),  # Permite hasta 1 año atrás
                     max_value=datetime.now().date() + timedelta(days=365),  # Permite hasta 1 año adelante
                     help="Seleccione cualquier fecha para simular diferentes escenarios",
@@ -187,12 +171,10 @@ def render_prediction_form():
             with col_hora:
                 hora_compra = st.time_input(
                     "Hora",
-                    value=datetime.now().time(),  # Valor por defecto
+                    value=datetime.now().time(),  # TODO -> RECORDATORIO Cambiar esta parte para que se cambie la hora
                     help="Seleccione cualquier hora del día",
                     label_visibility="collapsed"
                 )
-
-            # Mostrar información adicional sobre la fecha seleccionada
             if fecha_compra != datetime.now().date():
                 st.markdown(f"""
                             <div style='
@@ -209,11 +191,7 @@ def render_prediction_form():
                             """, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
-
-        # Botón de predicción centrado con diseño mejorado
         st.markdown("<div style='margin-top: 3rem; text-align: center;'>", unsafe_allow_html=True)
-
-        # Crear botón personalizado
         predict_clicked = st.button(
             "🔮 Generar Predicción Inteligente",
             type="primary",
@@ -222,8 +200,6 @@ def render_prediction_form():
         )
 
         st.markdown("</div>", unsafe_allow_html=True)
-
-        # Información adicional
         with st.expander("ℹ️ ¿Cómo funciona la predicción?", expanded=False):
             st.markdown("""
             <div style='padding: 1rem 0;'>
@@ -241,13 +217,10 @@ def render_prediction_form():
             """, unsafe_allow_html=True)
 
         if predict_clicked:
-            # Validaciones mejoradas
             if not validate_form_inputs(codigo_postal, sku_id):
                 return
 
-            # Procesar predicción
             process_prediction(codigo_postal, sku_id, cantidad, fecha_compra, hora_compra)
-
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -270,8 +243,6 @@ def validate_form_inputs(codigo_postal: str, sku_id: str) -> bool:
     if errors:
         for error in errors:
             st.error(error)
-
-        # Mostrar sugerencias
         with st.expander("💡 Ejemplos válidos", expanded=True):
             st.markdown("""
             **Códigos postales válidos:**
@@ -292,30 +263,23 @@ def validate_form_inputs(codigo_postal: str, sku_id: str) -> bool:
 def process_prediction(codigo_postal: str, sku_id: str, cantidad: int, fecha_compra, hora_compra):
     """Procesar la predicción con mejor manejo de errores"""
     try:
-        # Combinar fecha y hora
         fecha_hora_compra = datetime.combine(fecha_compra, hora_compra)
         fecha_str = fecha_hora_compra.strftime("%Y-%m-%dT%H:%M:%S")
 
-        # Mostrar información de procesamiento
         with st.status("🔄 Procesando predicción...", expanded=True) as status:
             st.write("📋 Validando datos de entrada...")
             st.write("🏪 Buscando tiendas disponibles...")
             st.write("🚚 Evaluando rutas óptimas...")
             st.write("🧠 Ejecutando algoritmos de IA...")
 
-            # Llamada al API
             api_client = APIClient()
             result, error = api_client.predict_delivery(codigo_postal, sku_id, cantidad, fecha_str)
 
             if result:
                 st.write("✅ Predicción completada exitosamente!")
                 status.update(label="✅ Predicción generada", state="complete", expanded=False)
-
-                # Guardar resultado y cambiar vista
                 st.session_state.prediction_data = result
                 st.session_state.show_results = True
-
-                # Mostrar mensaje de éxito con información clave
                 with st.success("🎉 ¡Predicción generada exitosamente!"):
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -327,18 +291,12 @@ def process_prediction(codigo_postal: str, sku_id: str, cantidad: int, fecha_com
                         st.metric("📈 Probabilidad", f"{result.get('probabilidad_cumplimiento', 0) * 100:.1f}%")
 
                 st.balloons()
-
-                # Recargar para mostrar resultados
                 st.rerun()
 
             else:
                 st.write("❌ Error en el procesamiento")
                 status.update(label="❌ Error en predicción", state="error", expanded=False)
-
-                # Mostrar error específico
                 st.error(f"🚫 {error}")
-
-                # Sugerencias de solución basadas en el tipo de error
                 show_error_suggestions(error)
 
     except Exception as e:

@@ -1,10 +1,6 @@
-/* styles/custom.css */
-
-/* Imports de Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
-/* Variables CSS - Paleta Contrastante y Armoniosa */
 :root {
     --primary-color: #2D5016;      /* Verde Bosque Oscuro */
     --secondary-color: #8B4513;    /* Marrón Chocolate */
@@ -20,15 +16,11 @@
     --border-radius: 12px;
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-/* Configuración global */
 .main .block-container {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     max-width: 1400px;
     padding-top: 2rem;
 }
-
-/* Header principal */
 .main-header {
     font-family: 'Poppins', sans-serif;
     font-size: 3rem;
@@ -42,8 +34,6 @@
     background-clip: text;
     animation: fadeInUp 0.8s ease-out;
 }
-
-/* Animaciones */
 @keyframes fadeInUp {
     from {
         opacity: 0;
@@ -74,8 +64,6 @@
         opacity: 0.8;
     }
 }
-
-/* Contenedor del formulario */
 .form-container {
     background: white;
     padding: 2.5rem;
@@ -91,8 +79,6 @@
     transform: translateY(-5px);
     box-shadow: 0 25px 50px -5px rgba(0, 0, 0, 0.15);
 }
-
-/* Tarjetas de métricas */
 .metric-card {
     background: white;
     padding: 2rem;
@@ -120,8 +106,6 @@
     transform: translateY(-8px);
     box-shadow: var(--shadow-lg);
 }
-
-/* Tarjeta de insights con paleta contrastante */
 .insight-card {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--success-color) 100%);
     color: white;
@@ -158,8 +142,6 @@
     font-size: 2.2rem;
     margin: 1rem 0;
 }
-
-/* Badges */
 .badge {
     padding: 0.4rem 1rem;
     border-radius: 50px;
@@ -184,8 +166,6 @@
     background: linear-gradient(135deg, var(--primary-color), #1A3A0E);
     color: white;
 }
-
-/* Botones personalizados con paleta contrastante */
 .stButton > button {
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
@@ -208,8 +188,6 @@
 .stButton > button:active {
     transform: translateY(0);
 }
-
-/* Tabs personalizados */
 .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
     background: var(--light-gray);
@@ -228,8 +206,6 @@
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
 }
-
-/* Inputs personalizados */
 .stTextInput > div > div > input,
 .stNumberInput > div > div > input,
 .stDateInput > div > div > input,
@@ -247,8 +223,6 @@
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
-
-/* Labels */
 .stTextInput > label,
 .stNumberInput > label,
 .stDateInput > label,
@@ -257,21 +231,15 @@
     color: var(--text-color);
     font-family: 'Poppins', sans-serif;
 }
-
-/* Expander personalizado */
 .streamlit-expanderHeader {
     background: var(--light-gray);
     border-radius: 12px;
     font-weight: 600;
     font-family: 'Poppins', sans-serif;
 }
-
-/* Loading spinner personalizado */
 .stSpinner > div {
     border-top-color: var(--primary-color) !important;
 }
-
-/* Success/Error messages */
 .stSuccess {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
     border: 1px solid var(--success-color);
@@ -283,8 +251,6 @@
     border: 1px solid var(--danger-color);
     border-radius: 12px;
 }
-
-/* Responsive design */
 @media (max-width: 768px) {
     .main-header {
         font-size: 2rem;
@@ -304,8 +270,6 @@
         padding: 2rem;
     }
 }
-
-/* Custom scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
 }

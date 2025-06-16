@@ -1,4 +1,3 @@
-# components/charts.py
 import streamlit as st
 from streamlit_echarts import st_echarts
 
@@ -17,18 +16,12 @@ def calcular_llegada_relativa(fecha_compra_str: str, fecha_entrega_str: str) -> 
     try:
         from datetime import datetime
 
-        # Convertir strings a objetos datetime
         fecha_compra = datetime.fromisoformat(fecha_compra_str.replace('Z', '+00:00'))
         fecha_entrega = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00'))
-
-        # Obtener solo las fechas (sin horas)
         dia_compra = fecha_compra.date()
         dia_entrega = fecha_entrega.date()
-
-        # Calcular diferencia en días
         diferencia_dias = (dia_entrega - dia_compra).days
 
-        # Lógica corregida para casos específicos
         if diferencia_dias == 0:
             return "HOY"
         elif diferencia_dias == 1:
@@ -36,7 +29,6 @@ def calcular_llegada_relativa(fecha_compra_str: str, fecha_entrega_str: str) -> 
         elif diferencia_dias > 0:
             return f"EN {diferencia_dias} DÍAS"
         else:
-            # Caso negativo (entrega antes de la compra - error)
             return f"HACE {abs(diferencia_dias)} DÍAS"
 
     except Exception as e:
@@ -46,10 +38,7 @@ def render_results_dashboard():
     """Renderizar dashboard completo de resultados"""
     data = st.session_state.prediction_data
 
-    # Botón de regreso
     render_back_button()
-
-    # Header
     render_header(
         "📊 Análisis de Predicción",
         "Resultados del análisis de ruta y predicción de entrega"
@@ -121,7 +110,7 @@ def render_delivery_promise(data: dict):
     fecha_entrega_str = data.get('fecha_entrega_estimada', '')
 
     if fecha_entrega_str:
-        # Formatear solo la fecha (sin hora)
+        # fecha (sin hora)
         fecha_entrega = format_datetime(fecha_entrega_str)
         rango = data.get('rango_horario', {})
 
@@ -180,7 +169,6 @@ def render_key_insights(data: dict):
 
 def render_interactive_charts(data: dict):
     """Renderizar gráficos interactivos"""
-    # Tabs para diferentes visualizaciones
     tab1, tab2, tab3, tab4 = st.tabs([
         "🗺️ Ruta de Entrega",
         "📊 Métricas de Rendimiento",
@@ -204,22 +192,16 @@ def render_interactive_charts(data: dict):
 def render_delivery_route_graph(data: dict):
     """Crear red dinámica centrada en el código postal destino como nodo principal"""
     st.markdown("#### 🎯 Red Logística Centrada en Destino")
-
-    # Mostrar información de resumen
     render_delivery_summary(data)
 
-    # Extraer datos estructurados del API response
     request_data = data.get('explicabilidad', {}).get('request_procesado', {})
     factores_externos = data.get('explicabilidad', {}).get('factores_externos', {})
     ruta_seleccionada = data.get('ruta_seleccionada', {})
     analisis_tiendas = data.get('explicabilidad_extendida', {}).get('analisis_tiendas', {})
     datos_geograficos = data.get('explicabilidad_extendida', {}).get('datos_geograficos', {})
-
-    # Crear nodos y enlaces dinámicamente
     nodes = []
     links = []
 
-    # Categorías para el grafo
     categories = _get_graph_categories()
 
     # 1. NODO CENTRAL: CÓDIGO POSTAL DESTINO (CORAZÓN DEL GRAFO)
@@ -268,11 +250,8 @@ def render_delivery_route_graph(data: dict):
     nodes.extend(candidate_nodes)
     links.extend(candidate_links)
 
-    # Configurar y renderizar el gráfico
     option = _build_logistics_graph_config(nodes, links, categories, data, codigo_postal)
     st_echarts(option, height="900px", key="logistics_network_centered")
-
-    # Mostrar métricas de resumen
     _render_logistics_summary_metrics(data, analisis_tiendas, ruta_seleccionada, codigo_postal)
 
 
@@ -301,8 +280,8 @@ def _create_central_destination_node(codigo_postal: str, datos_geograficos: dict
         "symbolSize": 100,  # Tamaño más proporcionado
         "category": 0,  # Destino Final
         "itemStyle": {
-            "color": "#888B8D",  # Cool Gray 8 C
-            "borderColor": "#D6DBD9",  # Quiet Gray border
+            "color": "#888B8D",
+            "borderColor": "#D6DBD9",
             "borderWidth": 6,
             "shadowBlur": 15,
             "shadowColor": "rgba(136,139,141,0.4)"
@@ -328,8 +307,8 @@ def _create_product_node(request_data: dict):
         "symbolSize": 80,  # Tamaño ajustado
         "category": 1,  # Producto
         "itemStyle": {
-            "color": "#9AA5B1",  # Blue Fog
-            "borderColor": "#D6DBD9",  # Quiet Gray border
+            "color": "#9AA5B1",
+            "borderColor": "#D6DBD9",
             "borderWidth": 4
         },
         "label": {"show": True, "fontSize": 14, "fontWeight": "bold"},
@@ -413,11 +392,11 @@ def _create_stock_available_stores(ruta_seleccionada: dict, product_node_name: s
         store_with_stock_node = {
             "name": f"🏪 {nombre_tienda}",
             "value": stock_disponible * 15,
-            "symbolSize": 85,  # Tamaño ajustado
+            "symbolSize": 85,
             "category": 2,  # Con Stock
             "itemStyle": {
-                "color": "#BACEC4",  # Jet Stream
-                "borderColor": "#9AA5B1",  # Blue Fog border
+                "color": "#BACEC4",
+                "borderColor": "#9AA5B1",
                 "borderWidth": 6,
                 "shadowBlur": 15,
                 "shadowColor": "rgba(186,206,196,0.4)"
@@ -437,7 +416,7 @@ def _create_stock_available_stores(ruta_seleccionada: dict, product_node_name: s
             "target": f"🏪 {nombre_tienda}",
             "value": request_data.get('cantidad', 0),
             "lineStyle": {
-                "color": "#9AA5B1",  # Blue Fog
+                "color": "#9AA5B1",
                 "width": 10,
                 "shadowBlur": 10,
                 "shadowColor": "rgba(154,165,177,0.3)"
@@ -447,7 +426,7 @@ def _create_stock_available_stores(ruta_seleccionada: dict, product_node_name: s
                 "formatter": f"✅ {stock_disponible} disponibles",
                 "fontSize": 12,
                 "fontWeight": "bold",
-                "color": "#BACEC4"  # Jet Stream
+                "color": "#BACEC4"
             }
         }
         links.append(product_to_stock_link)
@@ -462,11 +441,7 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
 
     segmentos = ruta_seleccionada.get('segmentos', [])
     ruta_id = ruta_seleccionada.get('ruta_id', '')
-
-    # Detectar si es ruta directa
     es_ruta_directa = ('direct_' in ruta_id) and (len(segmentos) == 1)
-
-    # Nodos intermedios ya creados
     current_node = None
 
     # Encontrar la tienda de origen (con stock)
@@ -483,13 +458,12 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
 
         # CASO ESPECIAL: Ruta Directa (Tienda → Cliente)
         if es_ruta_directa and destino_nombre.lower() in ['cliente', 'cliente final']:
-            # Usar directamente tipo_flota y carrier del API
             flota_icon = "🚚" if tipo_flota == "FI" else "🚛"
             flota_label = tipo_flota  # Usar FI/FE directamente
-            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"  # Ice Flow / Storm Front
+            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"
             flota_category = 5 if tipo_flota == "FI" else 6
 
-            # Crear nodo de Flota (entrega directa)
+            # (entrega directa)
             flota_directa_node = {
                 "name": f"{flota_icon} {carrier} ({flota_label})",
                 "value": 90,
@@ -498,7 +472,7 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
                 "itemStyle": {
                     "color": flota_color,
                     "borderWidth": 4,
-                    "borderColor": "#888B8D"  # Cool Gray border
+                    "borderColor": "#888B8D"
                 },
                 "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
                 "tooltip": f"{flota_icon} FLOTA {flota_label} (ENTREGA DIRECTA)\\nCarrier: {carrier}\\nTipo: {tipo_flota}\\nDistancia: {distancia:.1f}km\\nTiempo: {tiempo:.1f}h\\nEntrega directa desde tienda"
@@ -514,11 +488,11 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
                     "label": {"show": True, "formatter": "Recogida"}
                 })
 
-                links.append({
+                links.append({ # todo verificar ( duplicado de esta linea factoizar -> nex update )
                     "source": f"{flota_icon} {carrier} ({flota_label})",
                     "target": destination_node_name,
                     "lineStyle": {
-                        "color": "#888B8D",  # Cool Gray para entrega final
+                        "color": "#888B8D",
                         "width": 10,
                         "shadowBlur": 15,
                         "shadowColor": "rgba(136,139,141,0.4)"
@@ -536,26 +510,24 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
 
         # CASO 1: Tienda → CEDIS (usar tipo_flota del API)
         elif 'CEDIS' in destino_nombre or 'cedis' in destino_nombre.lower():
-            # Crear nodo CEDIS
             cedis_node = {
                 "name": f"🏭 {destino_nombre}",
                 "value": 80,
                 "symbolSize": 85,
                 "category": 4,  # CEDIS
                 "itemStyle": {
-                    "color": "#B4B7BA",  # Harbor Mist
+                    "color": "#B4B7BA",
                     "borderWidth": 4,
-                    "borderColor": "#888B8D"  # Cool Gray border
+                    "borderColor": "#888B8D"
                 },
                 "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
                 "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {destino_nombre}\\nDistancia desde tienda: {distancia:.1f}km\\nTiempo de traslado: {tiempo:.1f}h\\nCarrier: {carrier}"
             }
             nodes.append(cedis_node)
 
-            # Crear nodo de Flota usando tipo_flota del API
             flota_icon = "🚚" if tipo_flota == "FI" else "🚛"
-            flota_label = tipo_flota  # Usar FI/FE directamente
-            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"  # Ice Flow / Storm Front
+            flota_label = tipo_flota  #  FI/FE directamente
+            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"
             flota_category = 5 if tipo_flota == "FI" else 6
 
             flota_node = {
@@ -596,9 +568,9 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
                 "symbolSize": 75,
                 "category": 3,  # Sin Stock (es punto de distribución local)
                 "itemStyle": {
-                    "color": "#D6DBD9",  # Quiet Gray
+                    "color": "#D6DBD9",
                     "borderWidth": 3,
-                    "borderColor": "#B4B7BA"  # Harbor Mist border
+                    "borderColor": "#B4B7BA"
                 },
                 "label": {"show": True, "fontSize": 11},
                 "tooltip": f"🏪 TIENDA LOCAL (DISTRIBUCIÓN)\\nNombre: {destino_nombre}\\nFunción: Punto de distribución local\\nTiempo desde CEDIS: {tiempo:.1f}h"
@@ -609,7 +581,7 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
             links.append({
                 "source": current_node,
                 "target": f"🏪 {destino_nombre} (Local)",
-                "lineStyle": {"color": "#B4B7BA", "width": 5},  # Harbor Mist
+                "lineStyle": {"color": "#B4B7BA", "width": 5},
                 "label": {"show": True, "formatter": f"Distribución | {tiempo:.1f}h"}
             })
 
@@ -617,10 +589,9 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
 
         # CASO 3: Último tramo complejo → Cliente final (usar tipo_flota del API)
         elif destino_nombre.lower() in ['cliente', 'cliente final'] and not es_ruta_directa:
-            # Usar directamente tipo_flota y carrier del API
             flota_icon = "🚚" if tipo_flota == "FI" else "🚛"
-            flota_label = tipo_flota  # Usar FI/FE directamente
-            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"  # Ice Flow / Storm Front
+            flota_label = tipo_flota
+            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"
             flota_category = 5 if tipo_flota == "FI" else 6
 
             # Crear nodo de Flota (última milla)
@@ -632,7 +603,7 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
                 "itemStyle": {
                     "color": flota_color,
                     "borderWidth": 4,
-                    "borderColor": "#888B8D"  # Cool Gray border
+                    "borderColor": "#888B8D"
                 },
                 "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
                 "tooltip": f"{flota_icon} FLOTA {flota_label} (ÚLTIMA MILLA)\\nCarrier: {carrier}\\nTipo: {tipo_flota}\\nTiempo entrega: {tiempo:.1f}h\\nResponsable entrega final"
@@ -652,7 +623,7 @@ def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_node
                     "source": f"{flota_icon} {carrier} ({flota_label})",
                     "target": destination_node_name,
                     "lineStyle": {
-                        "color": "#888B8D",  # Cool Gray para entrega final
+                        "color": "#888B8D",
                         "width": 10,
                         "shadowBlur": 15,
                         "shadowColor": "rgba(136,139,141,0.4)"
@@ -674,7 +645,6 @@ def _create_destination_impact_factors(factores_externos: dict, destination_node
     nodes = []
     links = []
 
-    # Factores relevantes
     temperatura = factores_externos.get('temperatura_celsius', 0)
     lluvia = factores_externos.get('probabilidad_lluvia', 0)
     trafico = factores_externos.get('trafico_nivel', 'N/A')
@@ -682,15 +652,13 @@ def _create_destination_impact_factors(factores_externos: dict, destination_node
     factor_demanda = factores_externos.get('factor_demanda', 1.0)
     eventos = factores_externos.get('eventos_detectados', [])
     tiempo_extra = factores_externos.get('impacto_tiempo_extra_horas', 0)
-
-    # Solo factores con impacto significativo
     relevant_factors = []
 
     if lluvia > 20:
         relevant_factors.append({
             "name": f"🌧️ Lluvia {lluvia}%",
             "value": lluvia,
-            "color": "#C7D3DD",  # Ice Flow
+            "color": "#C7D3DD",
             "impact": f"☔ {lluvia}% probabilidad lluvia\\nImpacto: +{tiempo_extra:.1f}h entrega"
         })
 
@@ -698,12 +666,12 @@ def _create_destination_impact_factors(factores_externos: dict, destination_node
         relevant_factors.append({
             "name": f"🚦 Tráfico {trafico}",
             "value": 80,
-            "color": "#A3A5A8",  # Storm Front
+            "color": "#A3A5A8",
             "impact": f"🚗 Tráfico {trafico}\\nImpacto en última milla"
         })
 
     if zona_seguridad in ['Amarilla', 'Roja']:
-        color = "#B4B7BA" if zona_seguridad == 'Amarilla' else "#A3A5A8"  # Harbor Mist / Storm Front
+        color = "#B4B7BA" if zona_seguridad == 'Amarilla' else "#A3A5A8"
         relevant_factors.append({
             "name": f"🛡️ Zona {zona_seguridad}",
             "value": 70,
@@ -715,33 +683,30 @@ def _create_destination_impact_factors(factores_externos: dict, destination_node
         relevant_factors.append({
             "name": f"📈 Alta Demanda x{factor_demanda}",
             "value": factor_demanda * 30,
-            "color": "#C0C0C0",  # Silver
+            "color": "#C0C0C0",
             "impact": f"📊 Factor demanda: {factor_demanda}x\\nTemporada alta detectada"
         })
 
-    # Eventos especiales
     for evento in eventos:
         relevant_factors.append({
             "name": f"🎉 {evento}",
             "value": 85,
-            "color": "#C7D3DD",  # Ice Flow
+            "color": "#C7D3DD",
             "impact": f"🎄 Evento especial: {evento}\\nAumento demanda y restricciones"
         })
 
-    # Crear nodos y enlaces de factores
     for factor in relevant_factors:
         factor_node = {
             "name": factor["name"],
             "value": factor["value"],
             "symbolSize": 55,
-            "category": 7,  # Factores
+            "category": 7,
             "itemStyle": {"color": factor["color"]},
             "label": {"show": True, "fontSize": 10},
             "tooltip": factor["impact"]
         }
         nodes.append(factor_node)
 
-        # Enlace factor → destino (impacto directo)
         impact_link = {
             "source": factor["name"],
             "target": destination_node_name,
@@ -767,7 +732,6 @@ def _create_alternative_routes(candidatos: list, destination_node_name: str):
     nodes = []
     links = []
 
-    # Solo mostrar si hay múltiples candidatos
     if len(candidatos) <= 1:
         return nodes, links
 
@@ -787,7 +751,7 @@ def _create_alternative_routes(candidatos: list, destination_node_name: str):
             "value": score * 60,
             "symbolSize": 45,
             "category": 8,  # Alternativas
-            "itemStyle": {"color": "#B4B7BA", "opacity": 0.6},  # Harbor Mist
+            "itemStyle": {"color": "#B4B7BA", "opacity": 0.6},
             "label": {"show": True, "fontSize": 9},
             "tooltip": f"🏆 RUTA ALTERNATIVA #{ranking}\\nScore: {score:.3f}\\nTiempo: {tiempo:.1f}h\\nCosto: ${costo:.2f}\\nEstado: No seleccionada"
         }
@@ -798,7 +762,7 @@ def _create_alternative_routes(candidatos: list, destination_node_name: str):
             "source": f"🏆 Alternativa #{ranking}",
             "target": destination_node_name,
             "lineStyle": {
-                "color": "#B4B7BA",  # Harbor Mist
+                "color": "#B4B7BA",
                 "width": 2,
                 "type": "dashed",
                 "opacity": 0.4
@@ -818,12 +782,12 @@ def _build_logistics_graph_config(nodes: list, links: list, categories: list, da
             "subtext": f"Flujo completo desde tienda con stock hasta destino final | {len(nodes)} nodos | {len(links)} conexiones",
             "top": "10px",
             "left": "center",
-            "textStyle": {"fontSize": 22, "fontWeight": "bold", "color": "#888B8D"}  # Cool Gray
+            "textStyle": {"fontSize": 22, "fontWeight": "bold", "color": "#888B8D"}
         },
         "tooltip": {
             "trigger": "item",
             "backgroundColor": "rgba(255,255,255,0.98)",
-            "borderColor": "#888B8D",  # Cool Gray
+            "borderColor": "#888B8D",
             "borderWidth": 3,
             "textStyle": {"color": "#333", "fontSize": 12},
             "formatter": """
@@ -869,9 +833,9 @@ def _build_logistics_graph_config(nodes: list, links: list, categories: list, da
                 "lineStyle": {"width": 15, "opacity": 1},
                 "itemStyle": {
                     "shadowBlur": 25,
-                    "shadowColor": "rgba(136,139,141,0.6)",  # Cool Gray
+                    "shadowColor": "rgba(136,139,141,0.6)",
                     "borderWidth": 6,
-                    "borderColor": "#D6DBD9"  # Quiet Gray
+                    "borderColor": "#D6DBD9"
                 }
             },
             "lineStyle": {
@@ -984,7 +948,7 @@ def _render_logistics_summary_metrics(data: dict, analisis_tiendas: dict, ruta_s
         segmentos = ruta_seleccionada.get('segmentos', [])
         st.info(f"**Segmentos:** {len(segmentos)}")
 
-        # Detectar si hay CEDIS
+        # hay CEDIS??
         hay_cedis = any('CEDIS' in seg.get('destino_nombre', '') for seg in segmentos)
         st.info(f"**Vía CEDIS:** {'✅ Sí' if hay_cedis else '❌ No'}")
 
@@ -995,7 +959,6 @@ def _render_logistics_summary_metrics(data: dict, analisis_tiendas: dict, ruta_s
         st.info(f"**Tiempo:** {tiempo_total:.1f}h")
         st.info(f"**Éxito:** {probabilidad:.1%}")
 
-    # Timeline de proceso
     st.markdown("### 🛣️ Flujo Logístico Completo")
 
     factores = data.get('explicabilidad', {}).get('factores_externos', {})
@@ -1021,7 +984,6 @@ def _render_logistics_summary_metrics(data: dict, analisis_tiendas: dict, ruta_s
 
     st.markdown(timeline_info)
 
-    # Alertas importantes
     if eventos or factor_demanda > 1.5:
         st.markdown("### ⚠️ Factores de Impacto")
         if eventos:
@@ -1055,16 +1017,12 @@ def _create_destination_node(request_data: dict, datos_geograficos: dict):
 
 def render_delivery_summary(data: dict):
     """Renderizar resumen de información de entrega con lógica de fechas corregida"""
-    # Obtener datos del request original y respuesta
     request_data = data.get('explicabilidad', {}).get('request_procesado', {})
     fecha_compra_str = request_data.get('fecha_compra', '')
     fecha_entrega_str = data.get('fecha_entrega_estimada', '')
     rango_horario = data.get('rango_horario', {})
-
-    # Calcular días hasta entrega usando la nueva lógica
     dias_entrega = calcular_llegada_relativa(fecha_compra_str, fecha_entrega_str)
 
-    # Crear card de resumen con estilo vintage
     st.markdown(f"""
     <div style='
         background: linear-gradient(135deg, #F2E9E4, #E8DCCF);
@@ -1101,8 +1059,6 @@ def render_performance_metrics_chart(data: dict):
     st.markdown("#### 📊 Métricas de Rendimiento")
 
     ruta = data.get('ruta_seleccionada', {})
-
-    # Datos para el gráfico radar
     metrics_data = [
         {"name": "Tiempo", "value": ruta.get('score_tiempo', 0) * 100},
         {"name": "Costo", "value": ruta.get('score_costo', 0) * 100},
@@ -1155,16 +1111,12 @@ def render_performance_metrics_chart(data: dict):
 
 def render_process_timeline(data: dict):
     """Renderizar timeline del proceso con datos reales del API"""
-    st.markdown("#### ⏰ Timeline Detallado del Proceso")
+    st.markdown("#### ⏰ Timeline - Proceso")
 
-    # Obtener datos del timeline desde la respuesta del API
     explicabilidad_ext = data.get('explicabilidad_extendida', {})
     timeline_procesamiento = explicabilidad_ext.get('timeline_procesamiento', {})
     fee_calc = data.get('explicabilidad', {}).get('fee_calculation', {})
-
-    # Crear timeline de procesamiento del algoritmo
     col1, col2 = st.columns([1, 1])
-
     with col1:
         st.markdown("**🔄 Procesamiento del Sistema**")
 
@@ -1195,8 +1147,6 @@ def render_process_timeline(data: dict):
 
     with col2:
         st.markdown("**📦 Timeline de Entrega**")
-
-        # Datos del timeline desde la respuesta del API
         timeline_data = [
             {
                 "name": "Preparación",
@@ -1217,8 +1167,6 @@ def render_process_timeline(data: dict):
                 "description": "Tiempo de buffer"
             }
         ]
-
-        # Gráfico de barras horizontales para el timeline
         option = {
             "title": {
                 "text": "Distribución del Tiempo",
@@ -1269,8 +1217,6 @@ def render_process_timeline(data: dict):
         }
 
         st_echarts(option, height="250px")
-
-        # Resumen de tiempos
         tiempo_total = sum(item["duration"] for item in timeline_data)
         st.markdown(f"""
         <div style='
@@ -1285,8 +1231,6 @@ def render_process_timeline(data: dict):
             </strong>
         </div>
         """, unsafe_allow_html=True)
-
-    # Información adicional del procesamiento
     st.markdown("---")
 
     debug_info = data.get('explicabilidad', {}).get('debug_info', {})
@@ -1309,12 +1253,9 @@ def render_process_timeline(data: dict):
         scope = debug_info.get('search_scope', 'N/A')
         st.metric("🔍 Alcance", scope.title())
 
-    # Timeline interactivo si hay información de candidatos
     candidatos = data.get('explicabilidad', {}).get('candidatos_lightgbm', [])
     if candidatos and len(candidatos) > 1:
         st.markdown("### 🔄 Proceso de Evaluación de Candidatos")
-
-        # Crear timeline de evaluación de candidatos
         candidatos_timeline = []
         for i, candidato in enumerate(candidatos[:5]):  # Limitar a 5 para visualización
             ruta = candidato.get('ruta', {})
@@ -1392,7 +1333,6 @@ def render_factors_analysis(data: dict):
             {"name": "Seguridad", "value": 40 if zona_seguridad == 'Roja' else 80}
         ]
 
-        # Colores contrastantes para el pie chart
         contrast_pie_colors = ["#2D5016", "#8B4513", "#6D4C41", "#4A148C"]
 
         option = {
@@ -1419,8 +1359,6 @@ def render_factors_analysis(data: dict):
 
         st.metric("⏰ Tiempo Extra", f"{tiempo_extra:.1f} horas")
         st.metric("💰 Costo Extra", f"{costo_extra:.1f}%")
-
-        # Información adicional con colores contrastantes
         st.markdown(f"""
         <div style='
             background: #F8F6F0; 

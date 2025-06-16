@@ -1,4 +1,3 @@
-# components/layout.py
 import streamlit as st
 from pathlib import Path
 from config.settings import Config
@@ -27,7 +26,6 @@ def load_custom_css():
             with open(css_file) as f:
                 st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
         else:
-            # CSS inline como fallback
             st.markdown("""
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');

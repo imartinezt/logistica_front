@@ -1,4 +1,3 @@
-# services/api_client.py
 import requests
 import streamlit as st
 from config.settings import Config
