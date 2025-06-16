@@ -61,26 +61,34 @@ def get_risk_level_color(probability: float) -> str:
 
 
 def extract_key_insights(data: dict) -> list:
-    """Extraer insights clave de la respuesta del API"""
+    """MODIFICAR FUNCIÓN EXISTENTE - Extraer insights dinámicos del API response"""
     insights = []
 
     # Tiempo de entrega
-    if 'ruta_seleccionada' in data:
-        tiempo = data['ruta_seleccionada'].get('tiempo_total_horas', 0)
+    ruta = data.get('ruta_seleccionada', {})
+    if ruta:
+        tiempo = ruta.get('tiempo_total_horas', 0)
         insights.append(f"⏱️ Tiempo estimado: {tiempo:.1f} horas")
 
-    # Costo
-    if 'costo_envio_mxn' in data:
-        costo = data['costo_envio_mxn']
-        insights.append(f"💰 Costo: {format_currency(costo)}")
+    # Costo dinámico
+    costo = data.get('costo_envio_mxn', 0)
+    if costo > 0:
+        insights.append(f"💰 Costo: ${costo:,.2f} MXN")
 
-    # Probabilidad
-    if 'probabilidad_cumplimiento' in data:
-        prob = data['probabilidad_cumplimiento']
-        insights.append(f"📈 Probabilidad éxito: {format_percentage(prob)}")
+    # Probabilidad de éxito
+    probabilidad = data.get('probabilidad_cumplimiento', 0)
+    if probabilidad > 0:
+        insights.append(f"📈 Probabilidad éxito: {probabilidad:.1%}")
 
-    # Zona de riesgo
+    # Factores externos dinámicos
     factores = data.get('explicabilidad', {}).get('factores_externos', {})
+
+    # Temporada alta
+    if factores.get('es_temporada_alta'):
+        factor_demanda = factores.get('factor_demanda', 1.0)
+        insights.append(f"🎄 Alta demanda (x{factor_demanda}) - Temporada especial")
+
+    # Zona de seguridad
     zona = factores.get('zona_seguridad')
     if zona == 'Roja':
         insights.append("🔴 Zona de alto riesgo - Tiempo y costo incrementados")
@@ -88,5 +96,17 @@ def extract_key_insights(data: dict) -> list:
         insights.append("🟡 Zona de riesgo moderado")
     elif zona == 'Verde':
         insights.append("🟢 Zona de bajo riesgo")
+
+    # Eventos especiales
+    eventos = factores.get('eventos_detectados', [])
+    if eventos:
+        insights.append(f"🎉 Eventos especiales: {', '.join(eventos)}")
+
+    # Tipo de ruta (directa vs compleja)
+    segmentos = ruta.get('segmentos', [])
+    if len(segmentos) > 2:
+        insights.append("🏭 Ruta compleja via CEDIS")
+    elif len(segmentos) <= 2:
+        insights.append("🚚 Ruta directa optimizada")
 
     return insights

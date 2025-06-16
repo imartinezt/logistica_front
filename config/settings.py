@@ -10,10 +10,10 @@ class Config:
     APP_ICON = "📦"
     LAYOUT = "wide"
 
-    # Default Values
-    DEFAULT_CP = "05050"
-    DEFAULT_SKU = "LIV-004"
-    DEFAULT_QUANTITY = 3
+    # Default Values - SIN precarga de ejemplos
+    DEFAULT_CP = ""  # Campo vacío
+    DEFAULT_SKU = ""  # Campo vacío
+    DEFAULT_QUANTITY = 1  # Cantidad mínima
 
     # Paleta de colores contrastante y armoniosa
     PRIMARY_COLOR = "#2D5016"  # Verde Bosque Oscuro
@@ -27,3 +27,8 @@ class Config:
     # Chart Configuration
     CHART_HEIGHT = "500px"
     METRICS_CHART_HEIGHT = "400px"
+
+    # Validation Configuration
+    MIN_CP_LENGTH = 5
+    MIN_SKU_LENGTH = 3
+    MAX_QUANTITY = 100

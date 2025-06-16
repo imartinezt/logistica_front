@@ -9,6 +9,39 @@ from utils.helpers import (
 )
 
 
+def calcular_llegada_relativa(fecha_compra_str: str, fecha_entrega_str: str) -> str:
+    """Calcular cuándo llega el pedido de forma relativa a la fecha de compra"""
+    if not fecha_compra_str or not fecha_entrega_str:
+        return "N/A"
+
+    try:
+        from datetime import datetime
+
+        # Convertir strings a objetos datetime
+        fecha_compra = datetime.fromisoformat(fecha_compra_str.replace('Z', '+00:00'))
+        fecha_entrega = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00'))
+
+        # Obtener solo las fechas (sin horas)
+        dia_compra = fecha_compra.date()
+        dia_entrega = fecha_entrega.date()
+
+        # Calcular diferencia en días
+        diferencia_dias = (dia_entrega - dia_compra).days
+
+        # Lógica corregida para casos específicos
+        if diferencia_dias == 0:
+            return "HOY"
+        elif diferencia_dias == 1:
+            return "MAÑANA"
+        elif diferencia_dias > 0:
+            return f"EN {diferencia_dias} DÍAS"
+        else:
+            # Caso negativo (entrega antes de la compra - error)
+            return f"HACE {abs(diferencia_dias)} DÍAS"
+
+    except Exception as e:
+        return "N/A"
+
 def render_results_dashboard():
     """Renderizar dashboard completo de resultados"""
     data = st.session_state.prediction_data
@@ -85,8 +118,11 @@ def render_main_metrics(data: dict):
 
 def render_delivery_promise(data: dict):
     """Renderizar fecha promesa de entrega"""
-    if 'fecha_entrega_estimada' in data:
-        fecha_entrega = format_datetime(data['fecha_entrega_estimada'])
+    fecha_entrega_str = data.get('fecha_entrega_estimada', '')
+
+    if fecha_entrega_str:
+        # Formatear solo la fecha (sin hora)
+        fecha_entrega = format_datetime(fecha_entrega_str)
         rango = data.get('rango_horario', {})
 
         st.markdown(f"""
@@ -108,6 +144,8 @@ def render_delivery_promise(data: dict):
             </div>
         </div>
         """, unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ No se encontró fecha de entrega estimada")
 
 
 def render_key_insights(data: dict):
@@ -164,388 +202,651 @@ def render_interactive_charts(data: dict):
 
 
 def render_delivery_route_graph(data: dict):
-    """Crear y mostrar el grafo de ruta de entrega estilo Force Layout completo"""
-    st.markdown("#### 🚚 Red Completa de Factores de Decisión")
+    """Crear red dinámica centrada en el código postal destino como nodo principal"""
+    st.markdown("#### 🎯 Red Logística Centrada en Destino")
 
-    # Mostrar información de resumen primero
+    # Mostrar información de resumen
     render_delivery_summary(data)
 
-    # Obtener todos los datos del API
-    ruta = data.get('ruta_seleccionada', {})
-    factores = data.get('explicabilidad', {}).get('factores_externos', {})
+    # Extraer datos estructurados del API response
     request_data = data.get('explicabilidad', {}).get('request_procesado', {})
+    factores_externos = data.get('explicabilidad', {}).get('factores_externos', {})
+    ruta_seleccionada = data.get('ruta_seleccionada', {})
     analisis_tiendas = data.get('explicabilidad_extendida', {}).get('analisis_tiendas', {})
-    split_inventory = ruta.get('split_inventory', {})
-    ubicaciones_seleccionadas = split_inventory.get('ubicaciones', [])
+    datos_geograficos = data.get('explicabilidad_extendida', {}).get('datos_geograficos', {})
 
-    # Crear nodos y enlaces
+    # Crear nodos y enlaces dinámicamente
     nodes = []
     links = []
 
-    # Definir categorías completas con colores distintos
-    categories = [
-        {"name": "A: Producto", "itemStyle": {"color": "#4285F4"}},  # Azul Google
-        {"name": "B: Tiendas", "itemStyle": {"color": "#34A853"}},  # Verde Google
-        {"name": "C: Flota", "itemStyle": {"color": "#FBBC04"}},  # Amarillo Google
-        {"name": "D: Destino", "itemStyle": {"color": "#EA4335"}},  # Rojo Google
-        {"name": "E: Clima", "itemStyle": {"color": "#9AA0A6"}},  # Gris Google
-        {"name": "F: Eventos", "itemStyle": {"color": "#9C27B0"}},  # Púrpura Material
-        {"name": "G: Seguridad", "itemStyle": {"color": "#FF5722"}},  # Deep Orange
-        {"name": "H: Demanda", "itemStyle": {"color": "#607D8B"}},  # Blue Grey
-        {"name": "I: Métricas", "itemStyle": {"color": "#795548"}}  # Brown
+    # Categorías para el grafo
+    categories = _get_graph_categories()
+
+    # 1. NODO CENTRAL: CÓDIGO POSTAL DESTINO (CORAZÓN DEL GRAFO)
+    codigo_postal = request_data.get('codigo_postal', 'N/A')
+    destination_node = _create_central_destination_node(codigo_postal, datos_geograficos)
+    nodes.append(destination_node)
+    destination_node_name = destination_node['name']
+
+    # 2. NODO PRODUCTO/SKU con cantidad requerida
+    product_node = _create_product_node(request_data)
+    nodes.append(product_node)
+
+    # 3. TIENDAS CERCANAS AL CÓDIGO POSTAL DESTINO (con y sin stock)
+    tiendas_destino_nodes, tiendas_destino_links = _create_destination_area_stores(
+        datos_geograficos, codigo_postal, destination_node_name
+    )
+    nodes.extend(tiendas_destino_nodes)
+    links.extend(tiendas_destino_links)
+
+    # 4. TIENDA(S) CON STOCK DISPONIBLE (pueden estar lejos)
+    tiendas_stock_nodes, tiendas_stock_links = _create_stock_available_stores(
+        ruta_seleccionada, product_node['name'], request_data
+    )
+    nodes.extend(tiendas_stock_nodes)
+    links.extend(tiendas_stock_links)
+
+    # 5. MAPEO DINÁMICO DE RUTA LOGÍSTICA COMPLETA
+    route_nodes, route_links = _create_complete_logistics_route(
+        ruta_seleccionada, tiendas_stock_nodes, destination_node_name
+    )
+    nodes.extend(route_nodes)
+    links.extend(route_links)
+
+    # 6. FACTORES EXTERNOS QUE IMPACTAN AL DESTINO
+    factor_nodes, factor_links = _create_destination_impact_factors(
+        factores_externos, destination_node_name
+    )
+    nodes.extend(factor_nodes)
+    links.extend(factor_links)
+
+    # 7. CANDIDATOS ALTERNATIVOS (si existen)
+    candidate_nodes, candidate_links = _create_alternative_routes(
+        data.get('explicabilidad', {}).get('candidatos_lightgbm', []),
+        destination_node_name
+    )
+    nodes.extend(candidate_nodes)
+    links.extend(candidate_links)
+
+    # Configurar y renderizar el gráfico
+    option = _build_logistics_graph_config(nodes, links, categories, data, codigo_postal)
+    st_echarts(option, height="900px", key="logistics_network_centered")
+
+    # Mostrar métricas de resumen
+    _render_logistics_summary_metrics(data, analisis_tiendas, ruta_seleccionada, codigo_postal)
+
+
+def _get_graph_categories():
+    """Categorías con paleta Pantone neutra y fría"""
+    return [
+        {"name": "🎯 Destino Final", "itemStyle": {"color": "#888B8D"}},    # Cool Gray 8 C
+        {"name": "📦 Producto", "itemStyle": {"color": "#9AA5B1"}},         # Blue Fog
+        {"name": "🏪 Con Stock", "itemStyle": {"color": "#BACEC4"}},        # Jet Stream
+        {"name": "🏪 Sin Stock", "itemStyle": {"color": "#D6DBD9"}},        # Quiet Gray
+        {"name": "🏭 CEDIS", "itemStyle": {"color": "#B4B7BA"}},            # Harbor Mist
+        {"name": "🚚 Flota Interna", "itemStyle": {"color": "#C7D3DD"}},    # Ice Flow
+        {"name": "🚛 Flota Externa", "itemStyle": {"color": "#A3A5A8"}},    # Storm Front
+        {"name": "🌍 Factores", "itemStyle": {"color": "#C0C0C0"}},         # Silver
+        {"name": "🏆 Alternativas", "itemStyle": {"color": "#B4B7BA"}}      # Harbor Mist
     ]
 
-    # A: PRODUCTO/SKU
+
+def _create_central_destination_node(codigo_postal: str, datos_geograficos: dict):
+    """Crear el nodo central del código postal destino"""
+    destino_coords = datos_geograficos.get('destino', {}).get('coordenadas', {})
+
+    return {
+        "name": f"🎯 CP {codigo_postal}",
+        "value": 100,  # Máximo valor por ser el centro
+        "symbolSize": 100,  # Tamaño más proporcionado
+        "category": 0,  # Destino Final
+        "itemStyle": {
+            "color": "#888B8D",  # Cool Gray 8 C
+            "borderColor": "#D6DBD9",  # Quiet Gray border
+            "borderWidth": 6,
+            "shadowBlur": 15,
+            "shadowColor": "rgba(136,139,141,0.4)"
+        },
+        "label": {
+            "show": True,
+            "fontSize": 18,
+            "fontWeight": "bold",
+            "color": "#FFFFFF"
+        },
+        "tooltip": f"🎯 DESTINO FINAL\\nCódigo Postal: {codigo_postal}\\nLat: {destino_coords.get('lat', 'N/A')}\\nLon: {destino_coords.get('lon', 'N/A')}\\n\\n✅ Punto final de entrega"
+    }
+
+
+def _create_product_node(request_data: dict):
+    """Crear nodo del producto/SKU buscado"""
     sku_id = request_data.get('sku_id', 'N/A')
     cantidad = request_data.get('cantidad', 0)
-    nodes.append({
-        "name": f"SKU: {sku_id}",
-        "value": cantidad,
-        "symbolSize": 60,
-        "category": 0,
-        "itemStyle": {"color": "#4285F4"},
-        "label": {"show": True, "fontSize": 12, "fontWeight": "bold"}
-    })
 
-    # B: TODAS LAS TIENDAS (seleccionadas y no seleccionadas)
-    tiendas_detalle = analisis_tiendas.get('tiendas_detalle', [])
+    return {
+        "name": f"📦 {sku_id}",
+        "value": cantidad * 20,  # Escalar por cantidad
+        "symbolSize": 80,  # Tamaño ajustado
+        "category": 1,  # Producto
+        "itemStyle": {
+            "color": "#9AA5B1",  # Blue Fog
+            "borderColor": "#D6DBD9",  # Quiet Gray border
+            "borderWidth": 4
+        },
+        "label": {"show": True, "fontSize": 14, "fontWeight": "bold"},
+        "tooltip": f"📦 PRODUCTO SOLICITADO\\nSKU: {sku_id}\\nCantidad requerida: {cantidad} unidades"
+    }
 
-    # Tienda seleccionada
-    for ubicacion in ubicaciones_seleccionadas:
-        nombre_tienda = ubicacion.get('nombre_ubicacion', 'Tienda')
-        stock = ubicacion.get('stock_disponible', 0)
-        nodes.append({
-            "name": nombre_tienda,
-            "value": stock,
-            "symbolSize": 80,
-            "category": 1,
-            "selected": True,
-            "itemStyle": {"color": "#34A853", "borderColor": "#FFD700", "borderWidth": 3},
-            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"}
-        })
 
-        # SKU → Tienda seleccionada
-        links.append({
-            "source": f"SKU: {sku_id}",
-            "target": nombre_tienda,
-            "lineStyle": {"color": "#4285F4", "width": 4}
-        })
+def _create_destination_area_stores(datos_geograficos: dict, codigo_postal: str, destination_node_name: str):
+    """Crear tiendas cercanas al código postal destino (con y sin stock)"""
+    nodes = []
+    links = []
 
-    # Tiendas consideradas pero no seleccionadas
-    for tienda in tiendas_detalle:
-        if not tienda.get('seleccionada', False):
-            nombre = tienda.get('nombre', 'Tienda')
-            distancia = tienda.get('distancia_km', 0)
-            nodes.append({
-                "name": nombre,
+    tiendas_geograficas = datos_geograficos.get('tiendas', [])
+
+    for tienda in tiendas_geograficas:
+        nombre = tienda.get('nombre', 'Tienda')
+        distancia = tienda.get('distancia_km', 0)
+        coords = tienda.get('coordenadas', {})
+        seleccionada = tienda.get('seleccionada', False)
+
+        # Tienda cercana al destino (normalmente SIN stock, por eso no fue seleccionada)
+        if not seleccionada:
+            # Nodo de tienda sin stock (transparente)
+            store_node = {
+                "name": f"🏪 {nombre}",
                 "value": distancia,
-                "symbolSize": 50,
-                "category": 1,
-                "selected": False,
-                "itemStyle": {"color": "#34A853", "opacity": 0.6},
-                "label": {"show": True, "fontSize": 10}
-            })
+                "symbolSize": 60,
+                "category": 3,  # Sin Stock
+                "itemStyle": {
+                    "color": "#9AA0A6",
+                    "opacity": 0.4,
+                    "borderColor": "#666",
+                    "borderWidth": 2
+                },
+                "label": {
+                    "show": True,
+                    "fontSize": 11,
+                    "color": "#666"
+                },
+                "tooltip": f"🏪 TIENDA CERCANA AL DESTINO\\nNombre: {nombre}\\nDistancia al CP {codigo_postal.replace('CP ', '')}: {distancia:.1f} km\\n❌ Sin stock disponible\\nLat: {coords.get('lat', 'N/A')}\\nLon: {coords.get('lon', 'N/A')}"
+            }
+            nodes.append(store_node)
 
-            # SKU → Tiendas no seleccionadas (línea punteada)
+            # Enlace punteado Tienda sin stock → Destino (proximidad)
+            proximity_link = {
+                "source": f"🏪 {nombre}",
+                "target": destination_node_name,
+                "lineStyle": {
+                    "color": "#9AA0A6",
+                    "width": 3,
+                    "type": "dashed",
+                    "opacity": 0.5
+                },
+                "label": {
+                    "show": True,
+                    "formatter": f"📍 {distancia:.1f}km",
+                    "color": "#666"
+                }
+            }
+            links.append(proximity_link)
+
+    return nodes, links
+
+
+def _create_stock_available_stores(ruta_seleccionada: dict, product_node_name: str, request_data: dict):
+    """Crear tiendas que SÍ tienen stock disponible (pueden estar lejos del destino)"""
+    nodes = []
+    links = []
+
+    ubicaciones = ruta_seleccionada.get('split_inventory', {}).get('ubicaciones', [])
+
+    for ubicacion in ubicaciones:
+        nombre_tienda = ubicacion.get('nombre_ubicacion', 'Tienda')
+        stock_disponible = ubicacion.get('stock_disponible', 0)
+        stock_reservado = ubicacion.get('stock_reservado', 0)
+        coords = ubicacion.get('coordenadas', {})
+        horario = ubicacion.get('horario_operacion', 'N/A')
+        tiempo_prep = ubicacion.get('tiempo_preparacion_horas', 0)
+
+        # Nodo de tienda CON stock (destacada)
+        store_with_stock_node = {
+            "name": f"🏪 {nombre_tienda}",
+            "value": stock_disponible * 15,
+            "symbolSize": 85,  # Tamaño ajustado
+            "category": 2,  # Con Stock
+            "itemStyle": {
+                "color": "#BACEC4",  # Jet Stream
+                "borderColor": "#9AA5B1",  # Blue Fog border
+                "borderWidth": 6,
+                "shadowBlur": 15,
+                "shadowColor": "rgba(186,206,196,0.4)"
+            },
+            "label": {
+                "show": True,
+                "fontSize": 13,
+                "fontWeight": "bold"
+            },
+            "tooltip": f"🏪 TIENDA CON STOCK\\nNombre: {nombre_tienda}\\n✅ Stock disponible: {stock_disponible}\\n🔒 Stock reservado: {stock_reservado}\\n⏱️ Tiempo preparación: {tiempo_prep}h\\n🕐 Horario: {horario}\\nLat: {coords.get('lat', 'N/A')}\\nLon: {coords.get('lon', 'N/A')}"
+        }
+        nodes.append(store_with_stock_node)
+
+        # Enlace FUERTE Producto → Tienda con stock
+        product_to_stock_link = {
+            "source": product_node_name,
+            "target": f"🏪 {nombre_tienda}",
+            "value": request_data.get('cantidad', 0),
+            "lineStyle": {
+                "color": "#9AA5B1",  # Blue Fog
+                "width": 10,
+                "shadowBlur": 10,
+                "shadowColor": "rgba(154,165,177,0.3)"
+            },
+            "label": {
+                "show": True,
+                "formatter": f"✅ {stock_disponible} disponibles",
+                "fontSize": 12,
+                "fontWeight": "bold",
+                "color": "#BACEC4"  # Jet Stream
+            }
+        }
+        links.append(product_to_stock_link)
+
+    return nodes, links
+
+
+def _create_complete_logistics_route(ruta_seleccionada: dict, tiendas_stock_nodes: list, destination_node_name: str):
+    """Mapear la ruta logística completa desde tienda con stock hasta destino"""
+    nodes = []
+    links = []
+
+    segmentos = ruta_seleccionada.get('segmentos', [])
+    ruta_id = ruta_seleccionada.get('ruta_id', '')
+
+    # Detectar si es ruta directa
+    es_ruta_directa = ('direct_' in ruta_id) and (len(segmentos) == 1)
+
+    # Nodos intermedios ya creados
+    current_node = None
+
+    # Encontrar la tienda de origen (con stock)
+    if tiendas_stock_nodes:
+        current_node = tiendas_stock_nodes[0]['name']
+
+    for i, segmento in enumerate(segmentos):
+        origen_nombre = segmento.get('origen_nombre', 'Origen')
+        destino_nombre = segmento.get('destino_nombre', 'Destino')
+        distancia = segmento.get('distancia_km', 0)
+        tiempo = segmento.get('tiempo_viaje_horas', 0)
+        carrier = segmento.get('carrier', 'Carrier')
+        tipo_flota = segmento.get('tipo_flota', 'N/A')
+
+        # CASO ESPECIAL: Ruta Directa (Tienda → Cliente)
+        if es_ruta_directa and destino_nombre.lower() in ['cliente', 'cliente final']:
+            # Usar directamente tipo_flota y carrier del API
+            flota_icon = "🚚" if tipo_flota == "FI" else "🚛"
+            flota_label = tipo_flota  # Usar FI/FE directamente
+            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"  # Ice Flow / Storm Front
+            flota_category = 5 if tipo_flota == "FI" else 6
+
+            # Crear nodo de Flota (entrega directa)
+            flota_directa_node = {
+                "name": f"{flota_icon} {carrier} ({flota_label})",
+                "value": 90,
+                "symbolSize": 80,
+                "category": flota_category,
+                "itemStyle": {
+                    "color": flota_color,
+                    "borderWidth": 4,
+                    "borderColor": "#888B8D"  # Cool Gray border
+                },
+                "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                "tooltip": f"{flota_icon} FLOTA {flota_label} (ENTREGA DIRECTA)\\nCarrier: {carrier}\\nTipo: {tipo_flota}\\nDistancia: {distancia:.1f}km\\nTiempo: {tiempo:.1f}h\\nEntrega directa desde tienda"
+            }
+            nodes.append(flota_directa_node)
+
+            # Enlaces: Tienda → Flota → Destino final
+            if current_node:
+                links.append({
+                    "source": current_node,
+                    "target": f"{flota_icon} {carrier} ({flota_label})",
+                    "lineStyle": {"color": flota_color, "width": 7},
+                    "label": {"show": True, "formatter": "Recogida"}
+                })
+
+                links.append({
+                    "source": f"{flota_icon} {carrier} ({flota_label})",
+                    "target": destination_node_name,
+                    "lineStyle": {
+                        "color": "#888B8D",  # Cool Gray para entrega final
+                        "width": 10,
+                        "shadowBlur": 15,
+                        "shadowColor": "rgba(136,139,141,0.4)"
+                    },
+                    "label": {
+                        "show": True,
+                        "formatter": f"🎯 ENTREGA DIRECTA | {tiempo:.1f}h",
+                        "fontSize": 13,
+                        "fontWeight": "bold",
+                        "color": "#888B8D"
+                    }
+                })
+
+            continue  # Saltar al siguiente segmento
+
+        # CASO 1: Tienda → CEDIS (usar tipo_flota del API)
+        elif 'CEDIS' in destino_nombre or 'cedis' in destino_nombre.lower():
+            # Crear nodo CEDIS
+            cedis_node = {
+                "name": f"🏭 {destino_nombre}",
+                "value": 80,
+                "symbolSize": 85,
+                "category": 4,  # CEDIS
+                "itemStyle": {
+                    "color": "#B4B7BA",  # Harbor Mist
+                    "borderWidth": 4,
+                    "borderColor": "#888B8D"  # Cool Gray border
+                },
+                "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {destino_nombre}\\nDistancia desde tienda: {distancia:.1f}km\\nTiempo de traslado: {tiempo:.1f}h\\nCarrier: {carrier}"
+            }
+            nodes.append(cedis_node)
+
+            # Crear nodo de Flota usando tipo_flota del API
+            flota_icon = "🚚" if tipo_flota == "FI" else "🚛"
+            flota_label = tipo_flota  # Usar FI/FE directamente
+            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"  # Ice Flow / Storm Front
+            flota_category = 5 if tipo_flota == "FI" else 6
+
+            flota_node = {
+                "name": f"{flota_icon} {carrier} ({flota_label})",
+                "value": 60,
+                "symbolSize": 70,
+                "category": flota_category,
+                "itemStyle": {"color": flota_color, "borderWidth": 3, "borderColor": "#888B8D"},
+                "label": {"show": True, "fontSize": 11},
+                "tooltip": f"{flota_icon} FLOTA {flota_label}\\nCarrier: {carrier}\\nTipo: {tipo_flota}\\nSegmento: Tienda → CEDIS"
+            }
+            nodes.append(flota_node)
+
+            # Enlaces: Tienda → Flota → CEDIS
+            if current_node:
+                links.append({
+                    "source": current_node,
+                    "target": f"{flota_icon} {carrier} ({flota_label})",
+                    "lineStyle": {"color": flota_color, "width": 6},
+                    "label": {"show": True, "formatter": "Recogida"}
+                })
+
+                links.append({
+                    "source": f"{flota_icon} {carrier} ({flota_label})",
+                    "target": f"🏭 {destino_nombre}",
+                    "lineStyle": {"color": flota_color, "width": 6},
+                    "label": {"show": True, "formatter": f"{distancia:.1f}km | {tiempo:.1f}h"}
+                })
+
+            current_node = f"🏭 {destino_nombre}"
+
+        # CASO 2: CEDIS → Tienda local (cerca del destino)
+        elif 'Liverpool' in destino_nombre and current_node and '🏭' in current_node:
+            # Esta es la tienda local cerca del destino
+            tienda_local_node = {
+                "name": f"🏪 {destino_nombre} (Local)",
+                "value": 40,
+                "symbolSize": 75,
+                "category": 3,  # Sin Stock (es punto de distribución local)
+                "itemStyle": {
+                    "color": "#D6DBD9",  # Quiet Gray
+                    "borderWidth": 3,
+                    "borderColor": "#B4B7BA"  # Harbor Mist border
+                },
+                "label": {"show": True, "fontSize": 11},
+                "tooltip": f"🏪 TIENDA LOCAL (DISTRIBUCIÓN)\\nNombre: {destino_nombre}\\nFunción: Punto de distribución local\\nTiempo desde CEDIS: {tiempo:.1f}h"
+            }
+            nodes.append(tienda_local_node)
+
+            # Enlace CEDIS → Tienda Local
             links.append({
-                "source": f"SKU: {sku_id}",
-                "target": nombre,
-                "lineStyle": {"color": "#34A853", "width": 2, "type": "dashed", "opacity": 0.5}
+                "source": current_node,
+                "target": f"🏪 {destino_nombre} (Local)",
+                "lineStyle": {"color": "#B4B7BA", "width": 5},  # Harbor Mist
+                "label": {"show": True, "formatter": f"Distribución | {tiempo:.1f}h"}
             })
 
-    # C: FLOTA/CARRIER
-    carrier = data.get('carrier_principal', 'Carrier')
-    segmentos = ruta.get('segmentos', [])
-    tipo_flota = segmentos[0].get('tipo_flota', 'N/A') if segmentos else 'N/A'
+            current_node = f"🏪 {destino_nombre} (Local)"
 
-    flota_nombre = f"{carrier} ({tipo_flota})"
-    nodes.append({
-        "name": flota_nombre,
-        "symbolSize": 70,
-        "category": 2,
-        "itemStyle": {"color": "#FBBC04"},
-        "label": {"show": True, "fontSize": 12, "fontWeight": "bold"}
-    })
+        # CASO 3: Último tramo complejo → Cliente final (usar tipo_flota del API)
+        elif destino_nombre.lower() in ['cliente', 'cliente final'] and not es_ruta_directa:
+            # Usar directamente tipo_flota y carrier del API
+            flota_icon = "🚚" if tipo_flota == "FI" else "🚛"
+            flota_label = tipo_flota  # Usar FI/FE directamente
+            flota_color = "#C7D3DD" if tipo_flota == "FI" else "#A3A5A8"  # Ice Flow / Storm Front
+            flota_category = 5 if tipo_flota == "FI" else 6
 
-    # Tienda seleccionada → Flota
-    for ubicacion in ubicaciones_seleccionadas:
-        links.append({
-            "source": ubicacion.get('nombre_ubicacion'),
-            "target": flota_nombre,
-            "lineStyle": {"color": "#34A853", "width": 5}
+            # Crear nodo de Flota (última milla)
+            flota_final_node = {
+                "name": f"{flota_icon} {carrier} ({flota_label})",
+                "value": 90,
+                "symbolSize": 80,
+                "category": flota_category,
+                "itemStyle": {
+                    "color": flota_color,
+                    "borderWidth": 4,
+                    "borderColor": "#888B8D"  # Cool Gray border
+                },
+                "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                "tooltip": f"{flota_icon} FLOTA {flota_label} (ÚLTIMA MILLA)\\nCarrier: {carrier}\\nTipo: {tipo_flota}\\nTiempo entrega: {tiempo:.1f}h\\nResponsable entrega final"
+            }
+            nodes.append(flota_final_node)
+
+            # Enlaces: Punto actual → Flota → Destino final
+            if current_node:
+                links.append({
+                    "source": current_node,
+                    "target": f"{flota_icon} {carrier} ({flota_label})",
+                    "lineStyle": {"color": flota_color, "width": 7},
+                    "label": {"show": True, "formatter": "Handoff"}
+                })
+
+                links.append({
+                    "source": f"{flota_icon} {carrier} ({flota_label})",
+                    "target": destination_node_name,
+                    "lineStyle": {
+                        "color": "#888B8D",  # Cool Gray para entrega final
+                        "width": 10,
+                        "shadowBlur": 15,
+                        "shadowColor": "rgba(136,139,141,0.4)"
+                    },
+                    "label": {
+                        "show": True,
+                        "formatter": f"🎯 ENTREGA FINAL | {tiempo:.1f}h",
+                        "fontSize": 13,
+                        "fontWeight": "bold",
+                        "color": "#888B8D"
+                    }
+                })
+
+    return nodes, links
+
+
+def _create_destination_impact_factors(factores_externos: dict, destination_node_name: str):
+    """Crear factores externos que impactan específicamente al destino"""
+    nodes = []
+    links = []
+
+    # Factores relevantes
+    temperatura = factores_externos.get('temperatura_celsius', 0)
+    lluvia = factores_externos.get('probabilidad_lluvia', 0)
+    trafico = factores_externos.get('trafico_nivel', 'N/A')
+    zona_seguridad = factores_externos.get('zona_seguridad', 'N/A')
+    factor_demanda = factores_externos.get('factor_demanda', 1.0)
+    eventos = factores_externos.get('eventos_detectados', [])
+    tiempo_extra = factores_externos.get('impacto_tiempo_extra_horas', 0)
+
+    # Solo factores con impacto significativo
+    relevant_factors = []
+
+    if lluvia > 20:
+        relevant_factors.append({
+            "name": f"🌧️ Lluvia {lluvia}%",
+            "value": lluvia,
+            "color": "#C7D3DD",  # Ice Flow
+            "impact": f"☔ {lluvia}% probabilidad lluvia\\nImpacto: +{tiempo_extra:.1f}h entrega"
         })
 
-    # D: DESTINO/CLIENTE
-    cp_destino = request_data.get('codigo_postal', 'N/A')
-    cliente_nombre = f"Cliente CP: {cp_destino}"
-    nodes.append({
-        "name": cliente_nombre,
-        "symbolSize": 90,
-        "category": 3,
-        "itemStyle": {"color": "#EA4335", "borderColor": "#FFD700", "borderWidth": 3},
-        "label": {"show": True, "fontSize": 14, "fontWeight": "bold"}
-    })
-
-    # Flota → Cliente
-    distancia = ruta.get('distancia_total_km', 0)
-    links.append({
-        "source": flota_nombre,
-        "target": cliente_nombre,
-        "value": distancia,
-        "lineStyle": {"color": "#FBBC04", "width": 6},
-        "label": {"show": True, "formatter": f"{distancia:.0f} km"}
-    })
-
-    # E: FACTORES CLIMÁTICOS
-    clima = factores.get('condicion_clima', 'N/A')
-    temperatura = factores.get('temperatura_celsius', 0)
-    lluvia = factores.get('probabilidad_lluvia', 0)
-    viento = factores.get('viento_kmh', 0)
-
-    nodo_clima = f"🌡️ {clima}\n{temperatura}°C"
-    nodes.append({
-        "name": nodo_clima,
-        "value": temperatura,
-        "symbolSize": 55,
-        "category": 4,
-        "itemStyle": {"color": "#9AA0A6"},
-        "label": {"show": True, "fontSize": 10}
-    })
-
-    nodes.append({
-        "name": f"🌧️ Lluvia {lluvia}%",
-        "value": lluvia,
-        "symbolSize": 45,
-        "category": 4,
-        "itemStyle": {"color": "#9AA0A6"},
-        "label": {"show": True, "fontSize": 10}
-    })
-
-    nodes.append({
-        "name": f"💨 Viento {viento}km/h",
-        "value": viento,
-        "symbolSize": 45,
-        "category": 4,
-        "itemStyle": {"color": "#9AA0A6"},
-        "label": {"show": True, "fontSize": 10}
-    })
-
-    # Factores climáticos → Cliente
-    for factor_clima in [nodo_clima, f"🌧️ Lluvia {lluvia}%", f"💨 Viento {viento}km/h"]:
-        links.append({
-            "source": factor_clima,
-            "target": cliente_nombre,
-            "lineStyle": {"color": "#9AA0A6", "width": 2, "type": "dashed", "opacity": 0.7}
+    if trafico in ['Alto', 'Crítico']:
+        relevant_factors.append({
+            "name": f"🚦 Tráfico {trafico}",
+            "value": 80,
+            "color": "#A3A5A8",  # Storm Front
+            "impact": f"🚗 Tráfico {trafico}\\nImpacto en última milla"
         })
 
-    # F: EVENTOS/TEMPORALIDAD
-    eventos = factores.get('eventos_detectados', [])
-    es_temporada_alta = factores.get('es_temporada_alta', False)
+    if zona_seguridad in ['Amarilla', 'Roja']:
+        color = "#B4B7BA" if zona_seguridad == 'Amarilla' else "#A3A5A8"  # Harbor Mist / Storm Front
+        relevant_factors.append({
+            "name": f"🛡️ Zona {zona_seguridad}",
+            "value": 70,
+            "color": color,
+            "impact": f"⚠️ Zona de seguridad {zona_seguridad}\\nRequiere precauciones especiales"
+        })
 
+    if factor_demanda > 1.5:
+        relevant_factors.append({
+            "name": f"📈 Alta Demanda x{factor_demanda}",
+            "value": factor_demanda * 30,
+            "color": "#C0C0C0",  # Silver
+            "impact": f"📊 Factor demanda: {factor_demanda}x\\nTemporada alta detectada"
+        })
+
+    # Eventos especiales
     for evento in eventos:
-        nodes.append({
-            "name": f"🎄 {evento}",
-            "symbolSize": 50,
-            "category": 5,
-            "itemStyle": {"color": "#9C27B0"},
-            "label": {"show": True, "fontSize": 10}
+        relevant_factors.append({
+            "name": f"🎉 {evento}",
+            "value": 85,
+            "color": "#C7D3DD",  # Ice Flow
+            "impact": f"🎄 Evento especial: {evento}\\nAumento demanda y restricciones"
         })
 
-        # Evento → Cliente
-        links.append({
-            "source": f"🎄 {evento}",
-            "target": cliente_nombre,
-            "lineStyle": {"color": "#9C27B0", "width": 3, "type": "dashed"}
-        })
-
-    if es_temporada_alta:
-        nodes.append({
-            "name": "📈 Temporada Alta",
+    # Crear nodos y enlaces de factores
+    for factor in relevant_factors:
+        factor_node = {
+            "name": factor["name"],
+            "value": factor["value"],
             "symbolSize": 55,
-            "category": 5,
-            "itemStyle": {"color": "#9C27B0"},
-            "label": {"show": True, "fontSize": 11, "fontWeight": "bold"}
-        })
+            "category": 7,  # Factores
+            "itemStyle": {"color": factor["color"]},
+            "label": {"show": True, "fontSize": 10},
+            "tooltip": factor["impact"]
+        }
+        nodes.append(factor_node)
 
-        links.append({
-            "source": "📈 Temporada Alta",
-            "target": cliente_nombre,
-            "lineStyle": {"color": "#9C27B0", "width": 4}
-        })
+        # Enlace factor → destino (impacto directo)
+        impact_link = {
+            "source": factor["name"],
+            "target": destination_node_name,
+            "lineStyle": {
+                "color": factor["color"],
+                "width": 4,
+                "type": "dashed",
+                "opacity": 0.8
+            },
+            "label": {
+                "show": True,
+                "formatter": "Impacto",
+                "color": factor["color"]
+            }
+        }
+        links.append(impact_link)
 
-    # G: FACTORES DE SEGURIDAD/ZONA
-    zona_seguridad = factores.get('zona_seguridad', 'N/A')
-    criticidad = factores.get('criticidad_logistica', 'N/A')
-    trafico = factores.get('trafico_nivel', 'N/A')
+    return nodes, links
 
-    nodes.append({
-        "name": f"🛡️ Zona {zona_seguridad}",
-        "symbolSize": 60,
-        "category": 6,
-        "itemStyle": {"color": "#FF5722"},
-        "label": {"show": True, "fontSize": 11, "fontWeight": "bold"}
-    })
 
-    nodes.append({
-        "name": f"🚨 {criticidad}",
-        "symbolSize": 55,
-        "category": 6,
-        "itemStyle": {"color": "#FF5722"},
-        "label": {"show": True, "fontSize": 10}
-    })
+def _create_alternative_routes(candidatos: list, destination_node_name: str):
+    """Crear candidatos alternativos (si existen múltiples opciones)"""
+    nodes = []
+    links = []
 
-    nodes.append({
-        "name": f"🚦 Tráfico {trafico}",
-        "symbolSize": 50,
-        "category": 6,
-        "itemStyle": {"color": "#FF5722"},
-        "label": {"show": True, "fontSize": 10}
-    })
+    # Solo mostrar si hay múltiples candidatos
+    if len(candidatos) <= 1:
+        return nodes, links
 
-    # Factores de seguridad → Cliente
-    for factor_seg in [f"🛡️ Zona {zona_seguridad}", f"🚨 {criticidad}", f"🚦 Tráfico {trafico}"]:
-        links.append({
-            "source": factor_seg,
-            "target": cliente_nombre,
-            "lineStyle": {"color": "#FF5722", "width": 3}
-        })
+    # Mostrar top 2-3 alternativas
+    top_alternatives = candidatos[1:4]  # Excluir el ganador (índice 0)
 
-    # H: FACTORES DE DEMANDA
-    factor_demanda = factores.get('factor_demanda', 1)
-    tiempo_extra = factores.get('impacto_tiempo_extra_horas', 0)
-    costo_extra = factores.get('impacto_costo_extra_pct', 0)
+    for i, candidato in enumerate(top_alternatives):
+        ruta = candidato.get('ruta', {})
+        score = candidato.get('score_lightgbm', 0)
+        ranking = candidato.get('ranking_position', i + 2)
+        tiempo = ruta.get('tiempo_total_horas', 0)
+        costo = ruta.get('costo_total_mxn', 0)
 
-    nodes.append({
-        "name": f"📊 Demanda x{factor_demanda}",
-        "value": factor_demanda,
-        "symbolSize": 65,
-        "category": 7,
-        "itemStyle": {"color": "#607D8B"},
-        "label": {"show": True, "fontSize": 11, "fontWeight": "bold"}
-    })
+        # Nodo de ruta alternativa
+        alt_node = {
+            "name": f"🏆 Alternativa #{ranking}",
+            "value": score * 60,
+            "symbolSize": 45,
+            "category": 8,  # Alternativas
+            "itemStyle": {"color": "#B4B7BA", "opacity": 0.6},  # Harbor Mist
+            "label": {"show": True, "fontSize": 9},
+            "tooltip": f"🏆 RUTA ALTERNATIVA #{ranking}\\nScore: {score:.3f}\\nTiempo: {tiempo:.1f}h\\nCosto: ${costo:.2f}\\nEstado: No seleccionada"
+        }
+        nodes.append(alt_node)
 
-    nodes.append({
-        "name": f"⏰ +{tiempo_extra}h",
-        "value": tiempo_extra,
-        "symbolSize": 50,
-        "category": 7,
-        "itemStyle": {"color": "#607D8B"},
-        "label": {"show": True, "fontSize": 10}
-    })
+        # Enlace punteado alternativa → destino
+        alt_link = {
+            "source": f"🏆 Alternativa #{ranking}",
+            "target": destination_node_name,
+            "lineStyle": {
+                "color": "#B4B7BA",  # Harbor Mist
+                "width": 2,
+                "type": "dashed",
+                "opacity": 0.4
+            },
+            "label": {"show": False}
+        }
+        links.append(alt_link)
 
-    nodes.append({
-        "name": f"💰 +{costo_extra:.1f}%",
-        "value": costo_extra,
-        "symbolSize": 55,
-        "category": 7,
-        "itemStyle": {"color": "#607D8B"},
-        "label": {"show": True, "fontSize": 10}
-    })
+    return nodes, links
 
-    # Factores de demanda → Flota
-    for factor_dem in [f"📊 Demanda x{factor_demanda}", f"⏰ +{tiempo_extra}h", f"💰 +{costo_extra:.1f}%"]:
-        links.append({
-            "source": factor_dem,
-            "target": flota_nombre,
-            "lineStyle": {"color": "#607D8B", "width": 2, "type": "dashed"}
-        })
 
-    # I: MÉTRICAS DE DECISIÓN
-    probabilidad = data.get('probabilidad_cumplimiento', 0)
-    confianza = data.get('confianza_prediccion', 0)
-    score_lightgbm = ruta.get('score_lightgbm', 0)
-    tiempo_total = ruta.get('tiempo_total_horas', 0)
-
-    nodes.append({
-        "name": f"📈 Prob: {probabilidad * 100:.1f}%",
-        "value": probabilidad,
-        "symbolSize": 55,
-        "category": 8,
-        "itemStyle": {"color": "#795548"},
-        "label": {"show": True, "fontSize": 10}
-    })
-
-    nodes.append({
-        "name": f"🎯 Conf: {confianza * 100:.1f}%",
-        "value": confianza,
-        "symbolSize": 55,
-        "category": 8,
-        "itemStyle": {"color": "#795548"},
-        "label": {"show": True, "fontSize": 10}
-    })
-
-    nodes.append({
-        "name": f"🧠 Score: {score_lightgbm:.2f}",
-        "value": score_lightgbm,
-        "symbolSize": 60,
-        "category": 8,
-        "itemStyle": {"color": "#795548"},
-        "label": {"show": True, "fontSize": 11, "fontWeight": "bold"}
-    })
-
-    # Métricas → Decisión final (Cliente)
-    for metrica in [f"📈 Prob: {probabilidad * 100:.1f}%", f"🎯 Conf: {confianza * 100:.1f}%",
-                    f"🧠 Score: {score_lightgbm:.2f}"]:
-        links.append({
-            "source": metrica,
-            "target": cliente_nombre,
-            "lineStyle": {"color": "#795548", "width": 2, "type": "dotted"}
-        })
-
-    # Configuración del grafo Force Layout
-    option = {
+def _build_logistics_graph_config(nodes: list, links: list, categories: list, data: dict, codigo_postal: str):
+    """Configuración optimizada del gráfico centrado en destino"""
+    return {
         "title": {
-            "text": "Red Completa de Factores de Decisión",
-            "subtext": "Análisis integral de todos los elementos que influyen en la entrega",
+            "text": f"🎯 Red Logística → CP {codigo_postal}",
+            "subtext": f"Flujo completo desde tienda con stock hasta destino final | {len(nodes)} nodos | {len(links)} conexiones",
             "top": "10px",
             "left": "center",
-            "textStyle": {"fontSize": 18, "fontWeight": "bold", "color": "#2D5016"}
+            "textStyle": {"fontSize": 22, "fontWeight": "bold", "color": "#888B8D"}  # Cool Gray
         },
         "tooltip": {
             "trigger": "item",
-            "backgroundColor": "rgba(255,255,255,0.95)",
-            "borderColor": "#2D5016",
-            "borderWidth": 2,
-            "textStyle": {"color": "#333"},
+            "backgroundColor": "rgba(255,255,255,0.98)",
+            "borderColor": "#888B8D",  # Cool Gray
+            "borderWidth": 3,
+            "textStyle": {"color": "#333", "fontSize": 12},
             "formatter": """
             function(params) {
                 if (params.dataType === 'node') {
-                    let info = '<strong style="color: #2D5016;">' + params.data.name + '</strong><br/>';
-                    if (params.data.value !== undefined) {
-                        info += '<span style="color: #666;">Valor: <strong>' + params.data.value + '</strong></span><br/>';
+                    let info = '<div style="max-width: 300px;">';
+                    info += '<strong style="color: #FF0000; font-size: 14px;">' + params.data.name + '</strong><br/>';
+                    if (params.data.tooltip) {
+                        info += '<div style="color: #666; margin-top: 8px; line-height: 1.5;">' + params.data.tooltip.replace(/\\\\n/g, '<br/>') + '</div>';
                     }
-                    if (params.data.selected !== undefined) {
-                        info += '<span style="color: ' + (params.data.selected ? '#34A853' : '#EA4335') + ';">';
-                        info += params.data.selected ? '✅ Seleccionada' : '❌ No seleccionada';
-                        info += '</span>';
-                    }
+                    info += '</div>';
                     return info;
                 } else if (params.dataType === 'edge') {
-                    let info = '<strong>' + params.data.source + '</strong> → <strong>' + params.data.target + '</strong>';
-                    if (params.data.value !== undefined) {
-                        info += '<br/><span style="color: #666;">Distancia: ' + params.data.value + ' km</span>';
-                    }
-                    return info;
+                    return '<strong>' + params.data.source + '</strong><br/>➡️<br/><strong>' + params.data.target + '</strong>';
                 }
             }
             """
         },
         "legend": {
             "data": [cat["name"] for cat in categories],
-            "top": "50px",
+            "top": "60px",
             "orient": "horizontal",
-            "textStyle": {"fontSize": 11, "color": "#2D5016"},
-            "selected": {
-                "A: Producto": True,
-                "B: Tiendas": True,
-                "C: Flota": True,
-                "D: Destino": True,
-                "E: Clima": True,
-                "F: Eventos": True,
-                "G: Seguridad": True,
-                "H: Demanda": True,
-                "I: Métricas": True
-            }
+            "textStyle": {"fontSize": 11, "color": "#333"}
         },
         "series": [{
             "type": "graph",
@@ -558,66 +859,210 @@ def render_delivery_route_graph(data: dict):
             "symbol": "circle",
             "focusNodeAdjacency": True,
             "force": {
-                "repulsion": 1000,
-                "gravity": 0.1,
-                "edgeLength": [50, 200],
+                "repulsion": 2000,
+                "gravity": 0.2,
+                "edgeLength": [100, 400],
                 "layoutAnimation": True
             },
             "emphasis": {
                 "focus": "adjacency",
-                "lineStyle": {"width": 8, "opacity": 1},
+                "lineStyle": {"width": 15, "opacity": 1},
                 "itemStyle": {
-                    "shadowBlur": 20,
-                    "shadowColor": "rgba(0,0,0,0.5)",
-                    "borderWidth": 3,
+                    "shadowBlur": 25,
+                    "shadowColor": "rgba(136,139,141,0.6)",  # Cool Gray
+                    "borderWidth": 6,
+                    "borderColor": "#D6DBD9"  # Quiet Gray
+                }
+            },
+            "lineStyle": {
+                "curveness": 0.3,
+                "opacity": 0.9
+            }
+        }],
+        "animationDuration": 4000,
+        "animationEasingUpdate": "cubicOut"
+    }
+
+
+def _build_graph_config(nodes: list, links: list, categories: list, data: dict, codigo_postal: str):
+    """Configuración optimizada del gráfico centrado en destino"""
+    return {
+        "title": {
+            "text": f"🎯 Red Logística → CP {codigo_postal}",
+            "subtext": f"Flujo completo desde tienda con stock hasta destino final | {len(nodes)} nodos | {len(links)} conexiones",
+            "top": "10px",
+            "left": "center",
+            "textStyle": {"fontSize": 22, "fontWeight": "bold", "color": "#FF0000"}
+        },
+        "tooltip": {
+            "trigger": "item",
+            "backgroundColor": "rgba(255,255,255,0.98)",
+            "borderColor": "#FF0000",
+            "borderWidth": 3,
+            "textStyle": {"color": "#333", "fontSize": 12},
+            "formatter": """
+            function(params) {
+                if (params.dataType === 'node') {
+                    let info = '<div style="max-width: 300px;">';
+                    info += '<strong style="color: #FF0000; font-size: 14px;">' + params.data.name + '</strong><br/>';
+                    if (params.data.tooltip) {
+                        info += '<div style="color: #666; margin-top: 8px; line-height: 1.5;">' + params.data.tooltip.replace(/\\\\n/g, '<br/>') + '</div>';
+                    }
+                    info += '</div>';
+                    return info;
+                } else if (params.dataType === 'edge') {
+                    return '<strong>' + params.data.source + '</strong><br/>➡️<br/><strong>' + params.data.target + '</strong>';
+                }
+            }
+            """
+        },
+        "legend": {
+            "data": [cat["name"] for cat in categories],
+            "top": "60px",
+            "orient": "horizontal",
+            "textStyle": {"fontSize": 11, "color": "#333"}
+        },
+        "series": [{
+            "type": "graph",
+            "layout": "force",
+            "data": nodes,
+            "links": links,
+            "categories": categories,
+            "roam": True,
+            "draggable": True,
+            "symbol": "circle",
+            "focusNodeAdjacency": True,
+            "force": {
+                "repulsion": 2000,
+                "gravity": 0.2,
+                "edgeLength": [100, 400],
+                "layoutAnimation": True
+            },
+            "emphasis": {
+                "focus": "adjacency",
+                "lineStyle": {"width": 15, "opacity": 1},
+                "itemStyle": {
+                    "shadowBlur": 25,
+                    "shadowColor": "rgba(255,0,0,0.6)",
+                    "borderWidth": 6,
                     "borderColor": "#FFD700"
                 }
             },
             "lineStyle": {
-                "curveness": 0.1,
-                "opacity": 0.8
+                "curveness": 0.3,
+                "opacity": 0.9
             }
         }],
-        "animationDuration": 3000,
+        "animationDuration": 4000,
         "animationEasingUpdate": "cubicOut"
     }
 
-    st_echarts(option, height="700px", key="complete_decision_network")
 
-    # Información adicional
-    col1, col2, col3 = st.columns(3)
+def _render_logistics_summary_metrics(data: dict, analisis_tiendas: dict, ruta_seleccionada: dict, codigo_postal: str):
+    """Mostrar métricas enfocadas en el destino y la logística"""
+    st.markdown(f"### 📊 Resumen Logístico → CP {codigo_postal}")
+
+    col1, col2, col3, col4 = st.columns(4)
+
     with col1:
-        st.info(f"🏪 **Tiendas evaluadas:** {len(tiendas_detalle) + len(ubicaciones_seleccionadas)}")
-        st.info(f"📊 **Factor demanda:** {factor_demanda}x")
+        st.markdown("**🎯 Destino**")
+        st.info(f"**CP:** {codigo_postal}")
+
+        zona_seguridad = data.get('explicabilidad', {}).get('factores_externos', {}).get('zona_seguridad', 'N/A')
+        color = "🟢" if zona_seguridad == 'Verde' else "🟡" if zona_seguridad == 'Amarilla' else "🔴"
+        st.info(f"**Zona:** {color} {zona_seguridad}")
 
     with col2:
-        st.info(f"🎄 **Eventos activos:** {len(eventos)}")
-        st.info(f"⚠️ **Criticidad:** {criticidad}")
+        st.markdown("**🏪 Tiendas**")
+        total_tiendas = analisis_tiendas.get('total_consideradas', 0)
+        tiendas_con_stock = analisis_tiendas.get('total_seleccionadas', 0)
+        st.info(f"**Con stock:** {tiendas_con_stock}")
+        st.info(f"**Evaluadas:** {total_tiendas}")
 
     with col3:
-        st.info(f"🎯 **Score final:** {score_lightgbm:.3f}")
-        st.info(f"⏱️ **Tiempo total:** {tiempo_total:.1f}h")
+        st.markdown("**🚚 Logística**")
+        segmentos = ruta_seleccionada.get('segmentos', [])
+        st.info(f"**Segmentos:** {len(segmentos)}")
+
+        # Detectar si hay CEDIS
+        hay_cedis = any('CEDIS' in seg.get('destino_nombre', '') for seg in segmentos)
+        st.info(f"**Vía CEDIS:** {'✅ Sí' if hay_cedis else '❌ No'}")
+
+    with col4:
+        st.markdown("**📈 Resultados**")
+        tiempo_total = ruta_seleccionada.get('tiempo_total_horas', 0)
+        probabilidad = data.get('probabilidad_cumplimiento', 0)
+        st.info(f"**Tiempo:** {tiempo_total:.1f}h")
+        st.info(f"**Éxito:** {probabilidad:.1%}")
+
+    # Timeline de proceso
+    st.markdown("### 🛣️ Flujo Logístico Completo")
+
+    factores = data.get('explicabilidad', {}).get('factores_externos', {})
+    eventos = factores.get('eventos_detectados', [])
+    factor_demanda = factores.get('factor_demanda', 1.0)
+
+    timeline_info = "**Proceso:** "
+    for i, segmento in enumerate(segmentos, 1):
+        origen = segmento.get('origen_nombre', 'Origen')
+        destino = segmento.get('destino_nombre', 'Destino')
+        carrier = segmento.get('carrier', 'Carrier')
+        tiempo = segmento.get('tiempo_viaje_horas', 0)
+
+        if i > 1:
+            timeline_info += " → "
+
+        if 'CEDIS' in destino:
+            timeline_info += f"🏭 **{destino}** ({tiempo:.1f}h)"
+        elif destino.lower() == 'cliente':
+            timeline_info += f"🎯 **CP {codigo_postal}** ({carrier} - {tiempo:.1f}h)"
+        else:
+            timeline_info += f"🏪 **{destino}** ({tiempo:.1f}h)"
+
+    st.markdown(timeline_info)
+
+    # Alertas importantes
+    if eventos or factor_demanda > 1.5:
+        st.markdown("### ⚠️ Factores de Impacto")
+        if eventos:
+            st.warning(f"🎉 **Eventos especiales:** {', '.join(eventos)} - Mayor demanda y restricciones")
+        if factor_demanda > 1.5:
+            st.warning(f"📈 **Alta demanda:** Factor {factor_demanda}x - Temporada especial detectada")
+
+
+
+def _create_destination_node(request_data: dict, datos_geograficos: dict):
+    """NUEVA FUNCIÓN - Crear nodo del código postal destino"""
+    codigo_postal = request_data.get('codigo_postal', 'N/A')
+    destino_coords = datos_geograficos.get('destino', {}).get('coordenadas', {})
+
+    return {
+        "name": f"📍 CP: {codigo_postal}",
+        "value": int(codigo_postal) if codigo_postal.isdigit() else 0,
+        "symbolSize": 100,
+        "category": 8,  # Ubicación
+        "itemStyle": {
+            "color": "#E91E63",
+            "borderColor": "#FFD700",
+            "borderWidth": 5
+        },
+        "label": {"show": True, "fontSize": 16, "fontWeight": "bold"},
+        "tooltip": f"Destino: {codigo_postal}\\nLat: {destino_coords.get('lat', 'N/A')}\\nLon: {destino_coords.get('lon', 'N/A')}"
+    }
+
+
 
 
 def render_delivery_summary(data: dict):
-    """Renderizar resumen de información de entrega"""
+    """Renderizar resumen de información de entrega con lógica de fechas corregida"""
     # Obtener datos del request original y respuesta
     request_data = data.get('explicabilidad', {}).get('request_procesado', {})
     fecha_compra_str = request_data.get('fecha_compra', '')
     fecha_entrega_str = data.get('fecha_entrega_estimada', '')
     rango_horario = data.get('rango_horario', {})
 
-    # Calcular días hasta entrega
-    dias_entrega = "N/A"
-    if fecha_compra_str and fecha_entrega_str:
-        try:
-            from datetime import datetime
-            fecha_compra = datetime.fromisoformat(fecha_compra_str.replace('Z', '+00:00'))
-            fecha_entrega = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00'))
-            dias_diff = (fecha_entrega - fecha_compra).days
-            dias_entrega = "HOY" if dias_diff == 0 else f"{dias_diff} días"
-        except:
-            dias_entrega = "N/A"
+    # Calcular días hasta entrega usando la nueva lógica
+    dias_entrega = calcular_llegada_relativa(fecha_compra_str, fecha_entrega_str)
 
     # Crear card de resumen con estilo vintage
     st.markdown(f"""
@@ -709,72 +1154,220 @@ def render_performance_metrics_chart(data: dict):
 
 
 def render_process_timeline(data: dict):
-    """Renderizar timeline del proceso"""
-    st.markdown("#### ⏰ Timeline de Entrega")
+    """Renderizar timeline del proceso con datos reales del API"""
+    st.markdown("#### ⏰ Timeline Detallado del Proceso")
 
-    # Datos del timeline desde la respuesta del API
+    # Obtener datos del timeline desde la respuesta del API
+    explicabilidad_ext = data.get('explicabilidad_extendida', {})
+    timeline_procesamiento = explicabilidad_ext.get('timeline_procesamiento', {})
     fee_calc = data.get('explicabilidad', {}).get('fee_calculation', {})
 
-    timeline_data = [
-        {
-            "name": "Preparación",
-            "duration": fee_calc.get('tiempo_preparacion', 1),
-            "color": "#6D4C41"  # Marrón Medio
-        },
-        {
-            "name": "Tránsito",
-            "duration": fee_calc.get('tiempo_transito', 13.5),
-            "color": "#2D5016"  # Verde Bosque
-        },
-        {
-            "name": "Contingencia",
-            "duration": fee_calc.get('tiempo_contingencia', 1.75),
-            "color": "#4A148C"  # Púrpura Profundo
-        }
-    ]
+    # Crear timeline de procesamiento del algoritmo
+    col1, col2 = st.columns([1, 1])
 
-    option = {
-        "title": {
-            "text": "Distribución del Tiempo de Entrega",
-            "left": "center",
-            "textStyle": {"fontSize": 18, "fontWeight": "bold", "color": "#2D5016"}
-        },
-        "tooltip": {
-            "trigger": "axis",
-            "formatter": "{b}: {c} horas"
-        },
-        "xAxis": {
-            "type": "category",
-            "data": [item["name"] for item in timeline_data],
-            "axisLabel": {"fontSize": 12, "color": "#2D5016"},
-            "axisLine": {"lineStyle": {"color": "#8B7355"}}
-        },
-        "yAxis": {
-            "type": "value",
-            "name": "Horas",
-            "axisLabel": {"formatter": "{value}h", "color": "#2D5016"},
-            "axisLine": {"lineStyle": {"color": "#8B7355"}},
-            "splitLine": {"lineStyle": {"color": "#F0ECE0"}}
-        },
-        "series": [{
-            "type": "bar",
-            "data": [
-                {
-                    "value": item["duration"],
-                    "itemStyle": {"color": item["color"]}
-                } for item in timeline_data
-            ],
-            "label": {
-                "show": True,
-                "position": "top",
-                "formatter": "{c}h",
-                "color": "#2D5016"
+    with col1:
+        st.markdown("**🔄 Procesamiento del Sistema**")
+
+        pasos_procesamiento = [
+            {"paso": timeline_procesamiento.get('paso_1', '❓ Validación de datos'), "status": "✅"},
+            {"paso": timeline_procesamiento.get('paso_2', '❓ Búsqueda de tiendas'), "status": "✅"},
+            {"paso": timeline_procesamiento.get('paso_3', '❓ Verificación de stock'), "status": "✅"},
+            {"paso": timeline_procesamiento.get('paso_4', '❓ Generación de candidatos'), "status": "✅"},
+            {"paso": timeline_procesamiento.get('paso_5', '❓ Selección óptima'), "status": "✅"}
+        ]
+
+        for i, paso in enumerate(pasos_procesamiento):
+            status_color = "#34A853" if "✅" in paso["status"] else "#EA4335"
+            st.markdown(f"""
+            <div style='
+                display: flex;
+                align-items: center;
+                padding: 0.8rem;
+                margin: 0.5rem 0;
+                background: {"#f0f9ff" if "✅" in paso["status"] else "#fef2f2"};
+                border-left: 4px solid {status_color};
+                border-radius: 8px;
+            '>
+                <span style='font-size: 1.2rem; margin-right: 0.5rem;'>{paso["status"]}</span>
+                <span style='color: #374151; font-weight: 500;'>{paso["paso"].replace("✅ ", "")}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("**📦 Timeline de Entrega**")
+
+        # Datos del timeline desde la respuesta del API
+        timeline_data = [
+            {
+                "name": "Preparación",
+                "duration": fee_calc.get('tiempo_preparacion', 1.0),
+                "color": "#6D4C41",
+                "description": "Picking y empaque en tienda"
             },
-            "barWidth": "50%"
-        }]
-    }
+            {
+                "name": "Tránsito",
+                "duration": fee_calc.get('tiempo_transito', 2.7),
+                "color": "#2D5016",
+                "description": "Transporte hasta destino"
+            },
+            {
+                "name": "Contingencia",
+                "duration": fee_calc.get('tiempo_contingencia', 0.37),
+                "color": "#4A148C",
+                "description": "Tiempo de buffer"
+            }
+        ]
 
-    st_echarts(option, height="350px")
+        # Gráfico de barras horizontales para el timeline
+        option = {
+            "title": {
+                "text": "Distribución del Tiempo",
+                "textStyle": {"fontSize": 14, "color": "#2D5016"}
+            },
+            "tooltip": {
+                "trigger": "axis",
+                "formatter": """
+                function(params) {
+                    let item = params[0];
+                    return '<strong>' + item.name + '</strong><br/>' +
+                           'Tiempo: <strong>' + item.value + ' horas</strong><br/>' +
+                           'Descripción: ' + item.data.description;
+                }
+                """
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Horas",
+                "axisLabel": {"formatter": "{value}h", "color": "#2D5016"},
+                "axisLine": {"lineStyle": {"color": "#8B7355"}},
+                "splitLine": {"lineStyle": {"color": "#F0ECE0"}}
+            },
+            "yAxis": {
+                "type": "category",
+                "data": [item["name"] for item in reversed(timeline_data)],
+                "axisLabel": {"color": "#2D5016"},
+                "axisLine": {"lineStyle": {"color": "#8B7355"}}
+            },
+            "series": [{
+                "type": "bar",
+                "data": [
+                    {
+                        "value": item["duration"],
+                        "itemStyle": {"color": item["color"]},
+                        "description": item["description"]
+                    } for item in reversed(timeline_data)
+                ],
+                "label": {
+                    "show": True,
+                    "position": "right",
+                    "formatter": "{c}h",
+                    "color": "#2D5016",
+                    "fontWeight": "bold"
+                },
+                "barWidth": "60%"
+            }]
+        }
+
+        st_echarts(option, height="250px")
+
+        # Resumen de tiempos
+        tiempo_total = sum(item["duration"] for item in timeline_data)
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            text-align: center;
+        '>
+            <strong style='color: #2D5016; font-size: 1.1rem;'>
+                ⏱️ Tiempo Total Estimado: {tiempo_total:.1f} horas
+            </strong>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Información adicional del procesamiento
+    st.markdown("---")
+
+    debug_info = data.get('explicabilidad', {}).get('debug_info', {})
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        total_candidatos = debug_info.get('total_candidates_generated', 0)
+        st.metric("🏆 Candidatos", total_candidatos)
+
+    with col2:
+        metodo_opt = debug_info.get('optimization_method', 'N/A')
+        st.metric("🧠 Método", metodo_opt.replace('_', ' ').title())
+
+    with col3:
+        data_source = debug_info.get('data_source', 'N/A')
+        st.metric("💾 Fuente", data_source.replace('_', ' ').title())
+
+    with col4:
+        scope = debug_info.get('search_scope', 'N/A')
+        st.metric("🔍 Alcance", scope.title())
+
+    # Timeline interactivo si hay información de candidatos
+    candidatos = data.get('explicabilidad', {}).get('candidatos_lightgbm', [])
+    if candidatos and len(candidatos) > 1:
+        st.markdown("### 🔄 Proceso de Evaluación de Candidatos")
+
+        # Crear timeline de evaluación de candidatos
+        candidatos_timeline = []
+        for i, candidato in enumerate(candidatos[:5]):  # Limitar a 5 para visualización
+            ruta = candidato.get('ruta', {})
+            score = candidato.get('score_lightgbm', 0)
+            ranking = candidato.get('ranking_position', i + 1)
+
+            candidatos_timeline.append({
+                "name": f"Candidato #{ranking}",
+                "value": [i, score * 100, score],
+                "itemStyle": {"color": "#34A853" if ranking == 1 else "#64748B"}
+            })
+
+        timeline_option = {
+            "title": {
+                "text": "Evaluación de Candidatos",
+                "textStyle": {"fontSize": 16, "color": "#2D5016"}
+            },
+            "tooltip": {
+                "trigger": "item",
+                "formatter": "Candidato: {b}<br/>Score: {c}%"
+            },
+            "xAxis": {
+                "type": "category",
+                "data": [f"#{i + 1}" for i in range(len(candidatos_timeline))],
+                "name": "Orden de Evaluación"
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Score (%)",
+                "max": 100
+            },
+            "series": [{
+                "type": "line",
+                "data": candidatos_timeline,
+                "smooth": True,
+                "lineStyle": {"width": 3, "color": "#2D5016"},
+                "markPoint": {
+                    "data": [{"type": "max", "name": "Mejor Score"}]
+                },
+                "areaStyle": {
+                    "color": {
+                        "type": "linear",
+                        "x": 0, "y": 0, "x2": 0, "y2": 1,
+                        "colorStops": [
+                            {"offset": 0, "color": "rgba(45, 80, 22, 0.3)"},
+                            {"offset": 1, "color": "rgba(45, 80, 22, 0.05)"}
+                        ]
+                    }
+                }
+            }]
+        }
+
+        st_echarts(timeline_option, height="300px")
 
 
 def render_factors_analysis(data: dict):

@@ -7,144 +7,376 @@ from components.layout import render_header
 
 
 def render_prediction_form():
-    """Renderizar formulario de predicción"""
+    """Renderizar formulario de predicción mejorado"""
     # Header
     render_header(
         f"🚚 {Config.APP_TITLE}",
-        "Autor: Iván Martinez Trejo | Logistica Liverpool beta 1"
+        "Sistema inteligente de predicción de entregas para Liverpool"
     )
 
-    # Formulario principal
+    # Contenedor principal con mejor diseño
+    st.markdown("""
+    <div style='
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 1rem;
+    '>
+    """, unsafe_allow_html=True)
+
+    # Formulario principal con diseño mejorado
     with st.container():
-        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            padding: 3rem 2.5rem;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px -10px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+            margin: 2rem 0;
+        '>
+        """, unsafe_allow_html=True)
 
         # Título del formulario
         st.markdown("""
-        <div style='text-align: center; margin-bottom: 2rem;'>
-            <h3 style='color: #1e293b; font-family: Poppins; font-weight: 600;'>
-                📋 Información del Pedido
-            </h3>
-            <p style='color: #64748b; margin-top: 0.5rem;'>
-                Complete los datos para generar una predicción precisa
+        <div style='text-align: center; margin-bottom: 3rem;'>
+            <div style='
+                background: linear-gradient(135deg, #2D5016, #8B4513);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                font-size: 2.5rem;
+                font-weight: 800;
+                font-family: "Poppins", sans-serif;
+                margin-bottom: 0.5rem;
+            '>
+                📋 Nueva Predicción
+            </div>
+            <p style='
+                color: #64748b; 
+                font-size: 1.1rem;
+                margin: 0;
+                font-weight: 400;
+            '>
+                Complete la información del pedido para obtener una predicción inteligente
             </p>
         </div>
         """, unsafe_allow_html=True)
 
-        # Campos del formulario en dos columnas
+        # Campos del formulario en grid responsivo
         col1, col2 = st.columns(2, gap="large")
 
         with col1:
-            # Ubicación
-            st.markdown("### 📍 Ubicación")
+            # Destino
+            st.markdown("""
+            <div style='margin-bottom: 2rem;'>
+                <h4 style='
+                    color: #2D5016; 
+                    font-weight: 600; 
+                    margin-bottom: 0.5rem;
+                    font-family: "Poppins", sans-serif;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                '>
+                    📍 Destino de Entrega
+                </h4>
+                <p style='color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;'>
+                    Código postal donde se realizará la entrega
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
             codigo_postal = st.text_input(
-                "Código Postal de Destino",
-                value=Config.DEFAULT_CP,
-                help="📮 Ingrese el código postal donde se realizará la entrega",
-                placeholder="Ej: 05050"
+                "Código Postal",
+                value="",
+                help="Ingrese el código postal de 5 dígitos",
+                placeholder="76000",
+                label_visibility="collapsed"
             )
 
             # Producto
-            st.markdown("### 🏷️ Producto")
+            st.markdown("""
+            <div style='margin-bottom: 2rem; margin-top: 2rem;'>
+                <h4 style='
+                    color: #2D5016; 
+                    font-weight: 600; 
+                    margin-bottom: 0.5rem;
+                    font-family: "Poppins", sans-serif;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                '>
+                    🏷️ Información del Producto
+                </h4>
+                <p style='color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;'>
+                    SKU del producto a entregar
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
             sku_id = st.text_input(
-                "SKU del Producto",
-                value=Config.DEFAULT_SKU,
-                help="🏷️ Identificador único del producto",
-                placeholder="Ej: LIV-004"
+                "SKU",
+                value="",
+                help="Identificador único del producto (ej: LIV-001)",
+                placeholder="LIV-001",
+                label_visibility="collapsed"
             )
 
         with col2:
             # Cantidad
-            st.markdown("### 📦 Cantidad")
+            st.markdown("""
+            <div style='margin-bottom: 2rem;'>
+                <h4 style='
+                    color: #2D5016; 
+                    font-weight: 600; 
+                    margin-bottom: 0.5rem;
+                    font-family: "Poppins", sans-serif;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                '>
+                    📦 Cantidad
+                </h4>
+                <p style='color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;'>
+                    Número de unidades a entregar
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
             cantidad = st.number_input(
-                "Cantidad de Productos",
+                "Cantidad",
                 min_value=1,
                 max_value=100,
-                value=Config.DEFAULT_QUANTITY,
-                help="📦 Número de unidades a entregar"
+                value=1,
+                help="Cantidad de productos (máximo 100)",
+                label_visibility="collapsed"
             )
 
             # Fecha y hora
-            st.markdown("### 📅 Fecha de Compra")
-            col_fecha, col_hora = st.columns(2)
+            st.markdown("""
+            <div style='margin-bottom: 2rem; margin-top: 2rem;'>
+                <h4 style='
+                    color: #2D5016; 
+                    font-weight: 600; 
+                    margin-bottom: 0.5rem;
+                    font-family: "Poppins", sans-serif;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                '>
+                    📅 Fecha y Hora de Compra
+                </h4>
+                <p style='color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;'>
+                    Cuándo se realizó el pedido (puede simular cualquier fecha/hora)
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            from datetime import datetime, timedelta
 
+            col_fecha, col_hora = st.columns(2)
             with col_fecha:
                 fecha_compra = st.date_input(
                     "Fecha",
-                    value=datetime.now().date(),
-                    help="📅 Fecha en que se realizó la compra"
+                    value=datetime.now().date(),  # Valor por defecto
+                    min_value=datetime.now().date() - timedelta(days=365),  # Permite hasta 1 año atrás
+                    max_value=datetime.now().date() + timedelta(days=365),  # Permite hasta 1 año adelante
+                    help="Seleccione cualquier fecha para simular diferentes escenarios",
+                    label_visibility="collapsed"
                 )
 
             with col_hora:
                 hora_compra = st.time_input(
                     "Hora",
-                    value=datetime.now().time(),
-                    help="🕐 Hora en que se realizó la compra"
+                    value=datetime.now().time(),  # Valor por defecto
+                    help="Seleccione cualquier hora del día",
+                    label_visibility="collapsed"
                 )
+
+            # Mostrar información adicional sobre la fecha seleccionada
+            if fecha_compra != datetime.now().date():
+                st.markdown(f"""
+                            <div style='
+                                background: #e7f3ff; 
+                                padding: 0.8rem; 
+                                border-radius: 8px; 
+                                border-left: 4px solid #0066cc;
+                                margin: 1rem 0;
+                                font-size: 0.9rem;
+                            '>
+                                ℹ️ <strong>Simulación:</strong> Fecha seleccionada es diferente a hoy ({datetime.now().strftime('%d/%m/%Y')}). 
+                                Esto simula un pedido realizado en esa fecha.
+                            </div>
+                            """, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Botón de predicción centrado
-        st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1, 1])
+        # Botón de predicción centrado con diseño mejorado
+        st.markdown("<div style='margin-top: 3rem; text-align: center;'>", unsafe_allow_html=True)
 
-        with col2:
-            if st.button(
-                    "🔮 Generar Predicción",
-                    type="primary",
-                    use_container_width=True,
-                    help="Analizar los datos y generar predicción de entrega"
-            ):
-                # Validaciones
-                if not codigo_postal or len(codigo_postal) < 5:
-                    st.error("❌ Por favor ingrese un código postal válido (mínimo 5 dígitos)")
-                    return
+        # Crear botón personalizado
+        predict_clicked = st.button(
+            "🔮 Generar Predicción Inteligente",
+            type="primary",
+            help="Analizar los datos y generar predicción de entrega optimizada",
+            use_container_width=False
+        )
 
-                if not sku_id:
-                    st.error("❌ Por favor ingrese un SKU válido")
-                    return
+        st.markdown("</div>", unsafe_allow_html=True)
 
-                # Procesar predicción
-                process_prediction(codigo_postal, sku_id, cantidad, fecha_compra, hora_compra)
+        # Información adicional
+        with st.expander("ℹ️ ¿Cómo funciona la predicción?", expanded=False):
+            st.markdown("""
+            <div style='padding: 1rem 0;'>
+                <p style='margin-bottom: 1rem; color: #4a5568;'>
+                    Nuestro sistema utiliza inteligencia artificial avanzada para:
+                </p>
+                <ul style='color: #4a5568; line-height: 1.8;'>
+                    <li><strong>🏪 Optimizar tiendas:</strong> Selecciona las ubicaciones con mejor stock y distancia</li>
+                    <li><strong>🚚 Evaluar rutas:</strong> Compara opciones directas vs multi-segmento</li>
+                    <li><strong>🌡️ Considerar factores:</strong> Clima, tráfico, seguridad y demanda</li>
+                    <li><strong>⚡ Decidir inteligentemente:</strong> Combina LightGBM y análisis Gemini</li>
+                    <li><strong>📊 Predecir resultados:</strong> Tiempo, costo y probabilidad de éxito</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+
+        if predict_clicked:
+            # Validaciones mejoradas
+            if not validate_form_inputs(codigo_postal, sku_id):
+                return
+
+            # Procesar predicción
+            process_prediction(codigo_postal, sku_id, cantidad, fecha_compra, hora_compra)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def validate_form_inputs(codigo_postal: str, sku_id: str) -> bool:
+    """Validar entradas del formulario"""
+    errors = []
+
+    if not codigo_postal:
+        errors.append("📍 El código postal es obligatorio")
+    elif len(codigo_postal) < 5:
+        errors.append("📍 El código postal debe tener al menos 5 dígitos")
+    elif not codigo_postal.isdigit():
+        errors.append("📍 El código postal debe contener solo números")
+
+    if not sku_id:
+        errors.append("🏷️ El SKU del producto es obligatorio")
+    elif len(sku_id) < 3:
+        errors.append("🏷️ El SKU debe tener al menos 3 caracteres")
+
+    if errors:
+        for error in errors:
+            st.error(error)
+
+        # Mostrar sugerencias
+        with st.expander("💡 Ejemplos válidos", expanded=True):
+            st.markdown("""
+            **Códigos postales válidos:**
+            - `76000` (Querétaro)
+            - `05050` (Ciudad de México)
+            - `44100` (Guadalajara)
+
+            **SKUs válidos:**
+            - `LIV-001`
+            - `LIV-004`
+            - `PROD-123`
+            """)
+        return False
+
+    return True
 
 
 def process_prediction(codigo_postal: str, sku_id: str, cantidad: int, fecha_compra, hora_compra):
-    """Procesar la predicción"""
+    """Procesar la predicción con mejor manejo de errores"""
     try:
         # Combinar fecha y hora
         fecha_hora_compra = datetime.combine(fecha_compra, hora_compra)
         fecha_str = fecha_hora_compra.strftime("%Y-%m-%dT%H:%M:%S")
 
-        # Llamada al API
-        api_client = APIClient()
-        result, error = api_client.predict_delivery(codigo_postal, sku_id, cantidad, fecha_str)
+        # Mostrar información de procesamiento
+        with st.status("🔄 Procesando predicción...", expanded=True) as status:
+            st.write("📋 Validando datos de entrada...")
+            st.write("🏪 Buscando tiendas disponibles...")
+            st.write("🚚 Evaluando rutas óptimas...")
+            st.write("🧠 Ejecutando algoritmos de IA...")
 
-        if result:
-            # Guardar resultado y cambiar vista
-            st.session_state.prediction_data = result
-            st.session_state.show_results = True
+            # Llamada al API
+            api_client = APIClient()
+            result, error = api_client.predict_delivery(codigo_postal, sku_id, cantidad, fecha_str)
 
-            # Mostrar mensaje de éxito
-            st.success("✅ ¡Predicción generada exitosamente!")
-            st.balloons()
+            if result:
+                st.write("✅ Predicción completada exitosamente!")
+                status.update(label="✅ Predicción generada", state="complete", expanded=False)
 
-            # Recargar para mostrar resultados
-            st.rerun()
+                # Guardar resultado y cambiar vista
+                st.session_state.prediction_data = result
+                st.session_state.show_results = True
 
-        else:
-            # Mostrar error
-            st.error(f"❌ {error}")
+                # Mostrar mensaje de éxito con información clave
+                with st.success("🎉 ¡Predicción generada exitosamente!"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("⏱️ Tiempo",
+                                  f"{result.get('ruta_seleccionada', {}).get('tiempo_total_horas', 0):.1f}h")
+                    with col2:
+                        st.metric("💰 Costo", f"${result.get('costo_envio_mxn', 0):,.2f}")
+                    with col3:
+                        st.metric("📈 Probabilidad", f"{result.get('probabilidad_cumplimiento', 0) * 100:.1f}%")
 
-            # Sugerencias de solución
-            with st.expander("💡 Posibles soluciones"):
-                st.markdown("""
-                **Si el error persiste, intente:**
-                - Verificar que el servidor esté ejecutándose en `http://0.0.0.0:8000`
-                - Comprobar que el código postal sea válido
-                - Validar que el SKU exista en el sistema
-                - Revisar la conexión a internet
-                - Contactar al administrador del sistema
-                """)
+                st.balloons()
+
+                # Recargar para mostrar resultados
+                st.rerun()
+
+            else:
+                st.write("❌ Error en el procesamiento")
+                status.update(label="❌ Error en predicción", state="error", expanded=False)
+
+                # Mostrar error específico
+                st.error(f"🚫 {error}")
+
+                # Sugerencias de solución basadas en el tipo de error
+                show_error_suggestions(error)
 
     except Exception as e:
         st.error(f"❌ Error inesperado: {str(e)}")
         st.info("💡 Si el problema persiste, contacte al soporte técnico.")
+
+
+def show_error_suggestions(error: str):
+    """Mostrar sugerencias específicas basadas en el error"""
+    with st.expander("🛠️ Soluciones sugeridas", expanded=True):
+        if "conexión" in error.lower() or "connection" in error.lower():
+            st.markdown("""
+            **Error de conexión detectado:**
+            - ✅ Verificar conexión a internet
+            - ✅ Comprobar que el servidor esté activo en `http://0.0.0.0:8000`
+            - ✅ Revisar configuración de firewall
+            - ✅ Intentar nuevamente en unos segundos
+            """)
+        elif "timeout" in error.lower() or "tiempo" in error.lower():
+            st.markdown("""
+            **Tiempo de espera agotado:**
+            - ✅ El servidor está procesando, intente con datos más simples
+            - ✅ Verifique la estabilidad de la conexión
+            - ✅ Reduzca la cantidad de productos si es muy alta
+            """)
+        elif "404" in error or "500" in error:
+            st.markdown("""
+            **Error del servidor:**
+            - ✅ Verificar que el código postal sea válido
+            - ✅ Confirmar que el SKU existe en el sistema
+            - ✅ Contactar al administrador del sistema
+            """)
+        else:
+            st.markdown("""
+            **Soluciones generales:**
+            - ✅ Verificar que todos los campos estén completos
+            - ✅ Validar formato de código postal (solo números)
+            - ✅ Confirmar que el SKU sea correcto
+            - ✅ Revisar la conexión del servidor
+            - ✅ Contactar soporte técnico si persiste
+            """)
