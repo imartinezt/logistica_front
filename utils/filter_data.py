@@ -230,23 +230,38 @@ def render_dataframe_insights(df: pd.DataFrame, df_name: str):
         metrics_results[col]["Conteo (No Nulos)"] = column_data.count()
 
         if is_numeric_dtype(column_data):
+
+            # 1. Formatear MEDIA
             if "Media (Promedio)" in selected_numeric_metrics:
-                metrics_results[col]["Media (Promedio)"] = column_data.mean()
+                mean_val = column_data.mean()
+                metrics_results[col]["Media (Promedio)"] = f"{mean_val:.2f}"
+
+            # 2. Formatear MEDIANA
             if "Mediana" in selected_numeric_metrics:
-                metrics_results[col]["Mediana"] = column_data.median()
+                median_val = column_data.median()
+                metrics_results[col]["Mediana"] = f"{median_val:.2f}"
+
+            # 3. Formatear MODA (manejando múltiples valores)
             if "Moda" in selected_numeric_metrics:
                 mode_val = column_data.mode()
-                # ✅ SOLUCIÓN: Convertir la lista de modas a un string.
-                metrics_results[col]["Moda"] = ', '.join(map(str, mode_val)) if not mode_val.empty else "N/A"
+                if not mode_val.empty:
+                    # Función para formatear cada moda a 2 decimales
+                    formatter = lambda x: f"{x:.2f}"
+                    metrics_results[col]["Moda"] = ', '.join(mode_val.map(formatter))
+                else:
+                    metrics_results[col]["Moda"] = "N/A"
+
             if "Mínimo" in selected_numeric_metrics:
-                metrics_results[col]["Mínimo"] = column_data.min()
+                min_val = column_data.min()
+                metrics_results[col]["Mínimo"] = f"{min_val:.2f}"
+
             if "Máximo" in selected_numeric_metrics:
-                metrics_results[col]["Máximo"] = column_data.max()
+                max_val = column_data.max()
+                metrics_results[col]["Máximo"] = f"{max_val:.2f}"
 
         elif is_object_dtype(column_data) or isinstance(column_data.dtype, pd.CategoricalDtype):
             if "Moda" in selected_categorical_metrics:
                 mode_val = column_data.mode()
-                # ✅ SOLUCIÓN: Convertir la lista de modas a un string.
                 metrics_results[col]["Moda"] = ', '.join(map(str, mode_val)) if not mode_val.empty else "N/A"
             if "Número de Valores Únicos" in selected_categorical_metrics:
                 metrics_results[col]["Número de Valores Únicos"] = column_data.nunique()
