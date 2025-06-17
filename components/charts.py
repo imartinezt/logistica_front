@@ -231,7 +231,7 @@ def render_delivery_route_graph(data: dict):
         links.extend(nearby_links)
 
         # 5. RUTA LOGÍSTICA (DIRECTO O VÍA CEDIS)
-        route_nodes, route_links = _create_logistics_route_from_response(
+        route_nodes, route_links = _create_logistics_route_from_response_with_distances(
             logistica, cedis_analysis, stock_nodes, destination_node_name
         )
         nodes.extend(route_nodes)
@@ -324,6 +324,112 @@ def _create_stock_stores_from_response(stock_analysis: dict, product_node_name: 
 
     return nodes, links
 
+
+def _create_logistics_route_from_response_with_distances(logistica: dict, cedis_analysis, stock_nodes: list,
+                                                         destination_node_name: str):
+    """Crear ruta logística CON DISTANCIAS en los enlaces - para charts.py"""
+    nodes = []
+    links = []
+
+    if not stock_nodes:
+        return nodes, links
+
+    try:
+        current_node = stock_nodes[0]['name']
+        tipo_ruta = logistica.get('tipo_ruta', '')
+        carrier = logistica.get('carrier', 'N/A')
+        flota = logistica.get('flota', 'N/A')
+        distancia_total = logistica.get('distancia_km', 0)
+
+        # CASO 1: RUTA VÍA CEDIS
+        if 'cedis' in tipo_ruta.lower() and cedis_analysis and isinstance(cedis_analysis, dict):
+            cedis_seleccionado = cedis_analysis.get('cedis_seleccionado', {})
+
+            if cedis_seleccionado:
+                cedis_nombre = cedis_seleccionado.get('nombre', 'CEDIS')
+                dist_origen_cedis = cedis_seleccionado.get('distancia_origen_cedis_km', 0)
+                dist_cedis_destino = cedis_seleccionado.get('distancia_cedis_destino_km', 0)
+
+                # Crear nodo CEDIS
+                cedis_node = {
+                    "name": f"🏭 {cedis_nombre}",
+                    "value": 80,
+                    "symbolSize": 85,
+                    "category": 4,
+                    "itemStyle": {
+                        "color": "#6366f1",
+                        "borderWidth": 4,
+                        "borderColor": "#ffffff"
+                    },
+                    "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                    "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {cedis_nombre}\\nScore: {cedis_seleccionado.get('score', 0):.2f}"
+                }
+                nodes.append(cedis_node)
+
+                # Enlace tienda → CEDIS CON DISTANCIA
+                links.append({
+                    "source": current_node,
+                    "target": f"🏭 {cedis_nombre}",
+                    "lineStyle": {"color": "#6366f1", "width": 6},
+                    "label": {"show": True, "formatter": f"📦 {dist_origen_cedis:.0f}km", "fontSize": 11}
+                })
+
+                current_node = f"🏭 {cedis_nombre}"
+                distancia_restante = dist_cedis_destino
+        else:
+            # Ruta directa
+            distancia_restante = distancia_total
+
+        # CASO 2: CREAR NODO DE FLOTA/CARRIER
+        flota_icon = "🚚" if 'FI' in flota else "🚛"
+        flota_color = "#3b82f6" if 'FI' in flota else "#8b5cf6"
+        flota_category = 5 if 'FI' in flota else 6
+
+        flota_node = {
+            "name": f"{flota_icon} {carrier}",
+            "value": 90,
+            "symbolSize": 80,
+            "category": flota_category,
+            "itemStyle": {
+                "color": flota_color,
+                "borderWidth": 4,
+                "borderColor": "#ffffff"
+            },
+            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+            "tooltip": f"{flota_icon} FLOTA\\nCarrier: {carrier}\\nTipo: {flota}\\nTiempo: {logistica.get('tiempo_total_h', 0):.1f}h"
+        }
+        nodes.append(flota_node)
+
+        # Enlaces finales CON DISTANCIAS
+        links.append({
+            "source": current_node,
+            "target": f"{flota_icon} {carrier}",
+            "lineStyle": {"color": flota_color, "width": 7},
+            "label": {"show": True, "formatter": "🚚 Recogida", "fontSize": 10}
+        })
+
+        links.append({
+            "source": f"{flota_icon} {carrier}",
+            "target": destination_node_name,
+            "lineStyle": {
+                "color": "#1e40af",
+                "width": 10,
+                "shadowBlur": 15,
+                "shadowColor": "rgba(30, 64, 175, 0.4)"
+            },
+            "label": {
+                "show": True,
+                "formatter": f"🎯 {distancia_restante:.0f}km",
+                "fontSize": 13,
+                "fontWeight": "bold",
+                "color": "#1e40af"
+            }
+        })
+
+    except Exception as e:
+        st.error(f"Error creando ruta logística: {str(e)}")
+
+    return nodes, links
 
 def _create_nearby_stores_from_response(stock_analysis: dict, destination_node_name: str):
     """Crear tiendas cercanas sin stock"""
@@ -1127,3 +1233,112 @@ def render_technical_details(data: dict):
         show_json = st.checkbox("📄 Mostrar Response Completo del API")
         if show_json:
             st.json(data)
+
+
+# AGREGAR ESTA FUNCIÓN AL FINAL DE components/charts.py
+
+def _create_logistics_route_from_response_with_distances(logistica: dict, cedis_analysis, stock_nodes: list,
+                                                         destination_node_name: str):
+    """Crear ruta logística CON DISTANCIAS en los enlaces - para charts.py"""
+    nodes = []
+    links = []
+
+    if not stock_nodes:
+        return nodes, links
+
+    try:
+        current_node = stock_nodes[0]['name']
+        tipo_ruta = logistica.get('tipo_ruta', '')
+        carrier = logistica.get('carrier', 'N/A')
+        flota = logistica.get('flota', 'N/A')
+        distancia_total = logistica.get('distancia_km', 0)
+
+        # CASO 1: RUTA VÍA CEDIS
+        if 'cedis' in tipo_ruta.lower() and cedis_analysis and isinstance(cedis_analysis, dict):
+            cedis_seleccionado = cedis_analysis.get('cedis_seleccionado', {})
+
+            if cedis_seleccionado:
+                cedis_nombre = cedis_seleccionado.get('nombre', 'CEDIS')
+                dist_origen_cedis = cedis_seleccionado.get('distancia_origen_cedis_km', 0)
+                dist_cedis_destino = cedis_seleccionado.get('distancia_cedis_destino_km', 0)
+
+                # Crear nodo CEDIS
+                cedis_node = {
+                    "name": f"🏭 {cedis_nombre}",
+                    "value": 80,
+                    "symbolSize": 85,
+                    "category": 4,
+                    "itemStyle": {
+                        "color": "#6366f1",
+                        "borderWidth": 4,
+                        "borderColor": "#ffffff"
+                    },
+                    "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                    "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {cedis_nombre}\\nScore: {cedis_seleccionado.get('score', 0):.2f}"
+                }
+                nodes.append(cedis_node)
+
+                # Enlace tienda → CEDIS CON DISTANCIA
+                links.append({
+                    "source": current_node,
+                    "target": f"🏭 {cedis_nombre}",
+                    "lineStyle": {"color": "#6366f1", "width": 6},
+                    "label": {"show": True, "formatter": f"📦 {dist_origen_cedis:.0f}km", "fontSize": 11}
+                })
+
+                current_node = f"🏭 {cedis_nombre}"
+                distancia_restante = dist_cedis_destino
+        else:
+            # Ruta directa
+            distancia_restante = distancia_total
+
+        # CASO 2: CREAR NODO DE FLOTA/CARRIER
+        flota_icon = "🚚" if 'FI' in flota else "🚛"
+        flota_color = "#3b82f6" if 'FI' in flota else "#8b5cf6"
+        flota_category = 5 if 'FI' in flota else 6
+
+        flota_node = {
+            "name": f"{flota_icon} {carrier}",
+            "value": 90,
+            "symbolSize": 80,
+            "category": flota_category,
+            "itemStyle": {
+                "color": flota_color,
+                "borderWidth": 4,
+                "borderColor": "#ffffff"
+            },
+            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+            "tooltip": f"{flota_icon} FLOTA\\nCarrier: {carrier}\\nTipo: {flota}\\nTiempo: {logistica.get('tiempo_total_h', 0):.1f}h"
+        }
+        nodes.append(flota_node)
+
+        # Enlaces finales CON DISTANCIAS
+        links.append({
+            "source": current_node,
+            "target": f"{flota_icon} {carrier}",
+            "lineStyle": {"color": flota_color, "width": 7},
+            "label": {"show": True, "formatter": "🚚 Recogida", "fontSize": 10}
+        })
+
+        links.append({
+            "source": f"{flota_icon} {carrier}",
+            "target": destination_node_name,
+            "lineStyle": {
+                "color": "#1e40af",
+                "width": 10,
+                "shadowBlur": 15,
+                "shadowColor": "rgba(30, 64, 175, 0.4)"
+            },
+            "label": {
+                "show": True,
+                "formatter": f"🎯 {distancia_restante:.0f}km",
+                "fontSize": 13,
+                "fontWeight": "bold",
+                "color": "#1e40af"
+            }
+        })
+
+    except Exception as e:
+        st.error(f"Error creando ruta logística: {str(e)}")
+
+    return nodes, links
