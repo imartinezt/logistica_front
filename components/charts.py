@@ -7,6 +7,8 @@ from utils.helpers import (
     format_currency, format_percentage, format_datetime, get_delivery_status_badge, extract_key_insights
 )
 
+from utils.filter_data import select_dataframe, load_csv_data
+import pandas as pd
 
 def calcular_llegada_relativa(fecha_compra_str: str, fecha_entrega_str: str) -> str:
     """Calcular cuándo llega el pedido de forma relativa a la fecha de compra"""
@@ -169,11 +171,12 @@ def render_key_insights(data: dict):
 
 def render_interactive_charts(data: dict):
     """Renderizar gráficos interactivos"""
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🗺️ Ruta de Entrega",
         "📊 Métricas de Rendimiento",
         "⏰ Timeline de Proceso",
-        "🎯 Análisis de Factores"
+        "🎯 Análisis de Factores",
+        "📁 Fuentes de datos (.csv)"
     ])
 
     with tab1:
@@ -187,6 +190,10 @@ def render_interactive_charts(data: dict):
 
     with tab4:
         render_factors_analysis(data)
+
+    with tab5:
+        render_csv_data(Config.CSV_FOLDER)
+
 
 
 def render_delivery_route_graph(data: dict):
@@ -992,7 +999,6 @@ def _render_logistics_summary_metrics(data: dict, analisis_tiendas: dict, ruta_s
             st.warning(f"📈 **Alta demanda:** Factor {factor_demanda}x - Temporada especial detectada")
 
 
-
 def _create_destination_node(request_data: dict, datos_geograficos: dict):
     """NUEVA FUNCIÓN - Crear nodo del código postal destino"""
     codigo_postal = request_data.get('codigo_postal', 'N/A')
@@ -1011,8 +1017,6 @@ def _create_destination_node(request_data: dict, datos_geograficos: dict):
         "label": {"show": True, "fontSize": 16, "fontWeight": "bold"},
         "tooltip": f"Destino: {codigo_postal}\\nLat: {destino_coords.get('lat', 'N/A')}\\nLon: {destino_coords.get('lon', 'N/A')}"
     }
-
-
 
 
 def render_delivery_summary(data: dict):
@@ -1442,3 +1446,13 @@ def render_technical_details(data: dict):
             st.text(f"CP Destino: {destino.get('codigo_postal', 'N/A')}")
             coords = destino.get('coordenadas', {})
             st.text(f"Coordenadas: {coords.get('lat', 0):.4f}, {coords.get('lon', 0):.4f}")
+
+
+def render_csv_data(csv_directory: str):
+    st.header("🔎 Explorar Fuentes de Datos")
+
+    dataframes_disponibles = load_csv_data(csv_directory)
+
+    selected_and_filtered_df = select_dataframe(dataframes_disponibles)
+
+    st.dataframe(selected_and_filtered_df)

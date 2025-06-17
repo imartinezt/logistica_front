@@ -1,0 +1,29 @@
+# Environments
+.venv
+.env
+venv
+
+# Datasets
+*.pkl
+*.csv
+*.txt
+*.xlsx
+*.pickle
+
+# Data
+*.json
+
+# Others
+.vscode
+.DS_Store
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.xlsx
+.idea
+.dev.json
+.pro.json
+requirements.txt
+build.sh
+Dockerfile
