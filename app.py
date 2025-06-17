@@ -10,11 +10,7 @@ from components.forms import render_prediction_form
 from components.charts import render_results_dashboard
 from utils.helpers import init_session_state
 
-"""
-@Autor: Iván Martínez Trejo
-contacto: imartinezt@liverpool.com.mx
-Front end - FEE
-"""
+
 def main():
     setup_page_config()
     load_custom_css()

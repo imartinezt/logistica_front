@@ -145,7 +145,7 @@ def render_key_insights(data: dict):
         st.markdown("### 💡 Puntos Clave del Análisis")
 
         cols = st.columns(len(insights))
-        colors = ["#2D5016", "#8B4513", "#1B4332", "#6D4C41", "#4A148C"]  # Paleta contrastante
+        colors = ["#2D5016", "#8B4513", "#1B4332", "#6D4C41", "#4A148C"]
 
         for i, insight in enumerate(insights):
             with cols[i]:
@@ -256,64 +256,73 @@ def render_delivery_route_graph(data: dict):
 
 
 def _get_graph_categories():
-    """Categorías con paleta Pantone neutra y fría"""
+    """Categorías con paleta ejecutiva profesional"""
     return [
-        {"name": "🎯 Destino Final", "itemStyle": {"color": "#888B8D"}},    # Cool Gray 8 C
-        {"name": "📦 Producto", "itemStyle": {"color": "#9AA5B1"}},         # Blue Fog
-        {"name": "🏪 Con Stock", "itemStyle": {"color": "#BACEC4"}},        # Jet Stream
-        {"name": "🏪 Sin Stock", "itemStyle": {"color": "#D6DBD9"}},        # Quiet Gray
-        {"name": "🏭 CEDIS", "itemStyle": {"color": "#B4B7BA"}},            # Harbor Mist
-        {"name": "🚚 Flota Interna", "itemStyle": {"color": "#C7D3DD"}},    # Ice Flow
-        {"name": "🚛 Flota Externa", "itemStyle": {"color": "#A3A5A8"}},    # Storm Front
-        {"name": "🌍 Factores", "itemStyle": {"color": "#C0C0C0"}},         # Silver
-        {"name": "🏆 Alternativas", "itemStyle": {"color": "#B4B7BA"}}      # Harbor Mist
+        {"name": "🎯 Destino", "itemStyle": {"color": "#1e40af"}},        # Corporate Blue
+        {"name": "📦 Producto", "itemStyle": {"color": "#0ea5e9"}},       # Sky Blue
+        {"name": "🏪 Con Inventario", "itemStyle": {"color": "#10b981"}}, # Professional Green
+        {"name": "🏪 Sin Inventario", "itemStyle": {"color": "#94a3b8"}}, # Light Gray
+        {"name": "🏭 CEDIS", "itemStyle": {"color": "#6366f1"}},          # Indigo
+        {"name": "🚚 Flota Interna", "itemStyle": {"color": "#3b82f6"}},  # Bright Blue
+        {"name": "🚛 Flota Externa", "itemStyle": {"color": "#8b5cf6"}},  # Purple
+        {"name": "⚠️ Factores", "itemStyle": {"color": "#f59e0b"}},       # Executive Amber
+        {"name": "🔄 Alternativas", "itemStyle": {"color": "#64748b"}}    # Medium Gray
     ]
 
 
 def _create_central_destination_node(codigo_postal: str, datos_geograficos: dict):
-    """Crear el nodo central del código postal destino"""
+    """Crear el nodo central del destino con diseño ejecutivo"""
     destino_coords = datos_geograficos.get('destino', {}).get('coordenadas', {})
 
     return {
-        "name": f"🎯 CP {codigo_postal}",
-        "value": 100,  # Máximo valor por ser el centro
-        "symbolSize": 100,  # Tamaño más proporcionado
-        "category": 0,  # Destino Final
+        "name": f"🎯 {codigo_postal}",
+        "value": 100,
+        "symbolSize": 90,
+        "category": 0,
         "itemStyle": {
-            "color": "#888B8D",
-            "borderColor": "#D6DBD9",
-            "borderWidth": 6,
-            "shadowBlur": 15,
-            "shadowColor": "rgba(136,139,141,0.4)"
+            "color": "#1e40af",
+            "borderColor": "#ffffff",
+            "borderWidth": 4,
+            "shadowBlur": 12,
+            "shadowColor": "rgba(30, 64, 175, 0.3)"
         },
         "label": {
             "show": True,
-            "fontSize": 18,
-            "fontWeight": "bold",
-            "color": "#FFFFFF"
+            "fontSize": 16,
+            "fontWeight": "600",
+            "color": "#ffffff",
+            "fontFamily": "Inter, system-ui, sans-serif"
         },
-        "tooltip": f"🎯 DESTINO FINAL\\nCódigo Postal: {codigo_postal}\\nLat: {destino_coords.get('lat', 'N/A')}\\nLon: {destino_coords.get('lon', 'N/A')}\\n\\n✅ Punto final de entrega"
+        "tooltip": f"🎯 DESTINO PRINCIPAL\\nCódigo Postal: {codigo_postal}\\nLat: {destino_coords.get('lat', 'N/A')}\\nLon: {destino_coords.get('lon', 'N/A')}\\n\\n📍 Ubicación de entrega final"
     }
 
 
 def _create_product_node(request_data: dict):
-    """Crear nodo del producto/SKU buscado"""
+    """Crear nodo del producto con estilo ejecutivo"""
     sku_id = request_data.get('sku_id', 'N/A')
     cantidad = request_data.get('cantidad', 0)
 
     return {
         "name": f"📦 {sku_id}",
-        "value": cantidad * 20,  # Escalar por cantidad
-        "symbolSize": 80,  # Tamaño ajustado
-        "category": 1,  # Producto
+        "value": cantidad * 15,
+        "symbolSize": 75,
+        "category": 1,
         "itemStyle": {
-            "color": "#9AA5B1",
-            "borderColor": "#D6DBD9",
-            "borderWidth": 4
+            "color": "#0ea5e9",
+            "borderColor": "#ffffff",
+            "borderWidth": 3,
+            "shadowBlur": 8,
+            "shadowColor": "rgba(14, 165, 233, 0.3)"
         },
-        "label": {"show": True, "fontSize": 14, "fontWeight": "bold"},
-        "tooltip": f"📦 PRODUCTO SOLICITADO\\nSKU: {sku_id}\\nCantidad requerida: {cantidad} unidades"
+        "label": {
+            "show": True,
+            "fontSize": 13,
+            "fontWeight": "600",
+            "fontFamily": "Inter, system-ui, sans-serif"
+        },
+        "tooltip": f"📦 PRODUCTO REQUERIDO\\nSKU: {sku_id}\\nCantidad: {cantidad} unidades\\n\\n🛒 Artículo solicitado"
     }
+
 
 
 def _create_destination_area_stores(datos_geograficos: dict, codigo_postal: str, destination_node_name: str):
@@ -336,7 +345,7 @@ def _create_destination_area_stores(datos_geograficos: dict, codigo_postal: str,
                 "name": f"🏪 {nombre}",
                 "value": distancia,
                 "symbolSize": 60,
-                "category": 3,  # Sin Stock
+                "category": 3,
                 "itemStyle": {
                     "color": "#9AA0A6",
                     "opacity": 0.4,
@@ -374,7 +383,7 @@ def _create_destination_area_stores(datos_geograficos: dict, codigo_postal: str,
 
 
 def _create_stock_available_stores(ruta_seleccionada: dict, product_node_name: str, request_data: dict):
-    """Crear tiendas que SÍ tienen stock disponible (pueden estar lejos del destino)"""
+    """Crear tiendas con inventario disponible - estilo ejecutivo"""
     nodes = []
     links = []
 
@@ -388,45 +397,47 @@ def _create_stock_available_stores(ruta_seleccionada: dict, product_node_name: s
         horario = ubicacion.get('horario_operacion', 'N/A')
         tiempo_prep = ubicacion.get('tiempo_preparacion_horas', 0)
 
-        # Nodo de tienda CON stock (destacada)
+        # Nodo de tienda con inventario
         store_with_stock_node = {
             "name": f"🏪 {nombre_tienda}",
-            "value": stock_disponible * 15,
-            "symbolSize": 85,
-            "category": 2,  # Con Stock
+            "value": stock_disponible * 12,
+            "symbolSize": 80,
+            "category": 2,
             "itemStyle": {
-                "color": "#BACEC4",
-                "borderColor": "#9AA5B1",
-                "borderWidth": 6,
-                "shadowBlur": 15,
-                "shadowColor": "rgba(186,206,196,0.4)"
+                "color": "#10b981",
+                "borderColor": "#ffffff",
+                "borderWidth": 4,
+                "shadowBlur": 10,
+                "shadowColor": "rgba(16, 185, 129, 0.3)"
             },
             "label": {
                 "show": True,
-                "fontSize": 13,
-                "fontWeight": "bold"
+                "fontSize": 12,
+                "fontWeight": "600",
+                "fontFamily": "Inter, system-ui, sans-serif"
             },
-            "tooltip": f"🏪 TIENDA CON STOCK\\nNombre: {nombre_tienda}\\n✅ Stock disponible: {stock_disponible}\\n🔒 Stock reservado: {stock_reservado}\\n⏱️ Tiempo preparación: {tiempo_prep}h\\n🕐 Horario: {horario}\\nLat: {coords.get('lat', 'N/A')}\\nLon: {coords.get('lon', 'N/A')}"
+            "tooltip": f"🏪 TIENDA CON INVENTARIO\\nUbicación: {nombre_tienda}\\n✅ Stock disponible: {stock_disponible}\\n🔒 Stock reservado: {stock_reservado}\\n⏱️ Tiempo prep: {tiempo_prep}h\\n🕐 Horario: {horario}\\nCoordenadas: {coords.get('lat', 'N/A')}, {coords.get('lon', 'N/A')}"
         }
         nodes.append(store_with_stock_node)
 
-        # Enlace FUERTE Producto → Tienda con stock
+        # Enlace producto → tienda con inventario
         product_to_stock_link = {
             "source": product_node_name,
             "target": f"🏪 {nombre_tienda}",
             "value": request_data.get('cantidad', 0),
             "lineStyle": {
-                "color": "#9AA5B1",
-                "width": 10,
-                "shadowBlur": 10,
-                "shadowColor": "rgba(154,165,177,0.3)"
+                "color": "#10b981",
+                "width": 8,
+                "shadowBlur": 6,
+                "shadowColor": "rgba(16, 185, 129, 0.2)"
             },
             "label": {
                 "show": True,
                 "formatter": f"✅ {stock_disponible} disponibles",
-                "fontSize": 12,
-                "fontWeight": "bold",
-                "color": "#BACEC4"
+                "fontSize": 11,
+                "fontWeight": "600",
+                "color": "#10b981",
+                "fontFamily": "Inter, system-ui, sans-serif"
             }
         }
         links.append(product_to_stock_link)
@@ -735,8 +746,7 @@ def _create_alternative_routes(candidatos: list, destination_node_name: str):
     if len(candidatos) <= 1:
         return nodes, links
 
-    # Mostrar top 2-3 alternativas
-    top_alternatives = candidatos[1:4]  # Excluir el ganador (índice 0)
+    top_alternatives = candidatos[1:4]
 
     for i, candidato in enumerate(top_alternatives):
         ruta = candidato.get('ruta', {})
@@ -775,33 +785,44 @@ def _create_alternative_routes(candidatos: list, destination_node_name: str):
 
 
 def _build_logistics_graph_config(nodes: list, links: list, categories: list, data: dict, codigo_postal: str):
-    """Configuración optimizada del gráfico centrado en destino"""
+    """Configuración del gráfico con diseño ejecutivo"""
     return {
         "title": {
-            "text": f"🎯 Red Logística → CP {codigo_postal}",
-            "subtext": f"Flujo completo desde tienda con stock hasta destino final | {len(nodes)} nodos | {len(links)} conexiones",
-            "top": "10px",
+            "text": f"🎯 Red Logística → {codigo_postal}",
+            "subtext": f"Análisis de flujo operacional | {len(nodes)} nodos | {len(links)} conexiones",
+            "top": "15px",
             "left": "center",
-            "textStyle": {"fontSize": 22, "fontWeight": "bold", "color": "#888B8D"}
+            "textStyle": {
+                "fontSize": 20,
+                "fontWeight": "600",
+                "color": "#1e293b",
+                "fontFamily": "Inter, system-ui, sans-serif"
+            },
+            "subtextStyle": {
+                "fontSize": 12,
+                "color": "#64748b",
+                "fontFamily": "Inter, system-ui, sans-serif"
+            }
         },
         "tooltip": {
             "trigger": "item",
-            "backgroundColor": "rgba(255,255,255,0.98)",
-            "borderColor": "#888B8D",
-            "borderWidth": 3,
-            "textStyle": {"color": "#333", "fontSize": 12},
+            "backgroundColor": "#ffffff",
+            "borderColor": "#e2e8f0",
+            "borderWidth": 1,
+            "borderRadius": 8,
+            "textStyle": {"color": "#1e293b", "fontSize": 12, "fontFamily": "Inter, system-ui, sans-serif"},
             "formatter": """
             function(params) {
                 if (params.dataType === 'node') {
-                    let info = '<div style="max-width: 300px;">';
-                    info += '<strong style="color: #FF0000; font-size: 14px;">' + params.data.name + '</strong><br/>';
+                    let info = '<div style="max-width: 300px; font-family: Inter, system-ui, sans-serif;">';
+                    info += '<strong style="color: #1e40af; font-size: 14px; font-weight: 600;">' + params.data.name + '</strong><br/>';
                     if (params.data.tooltip) {
-                        info += '<div style="color: #666; margin-top: 8px; line-height: 1.5;">' + params.data.tooltip.replace(/\\\\n/g, '<br/>') + '</div>';
+                        info += '<div style="color: #64748b; margin-top: 8px; line-height: 1.5; font-size: 12px;">' + params.data.tooltip.replace(/\\\\n/g, '<br/>') + '</div>';
                     }
                     info += '</div>';
                     return info;
                 } else if (params.dataType === 'edge') {
-                    return '<strong>' + params.data.source + '</strong><br/>➡️<br/><strong>' + params.data.target + '</strong>';
+                    return '<div style="font-family: Inter, system-ui, sans-serif;"><strong>' + params.data.source + '</strong><br/>➡️<br/><strong>' + params.data.target + '</strong></div>';
                 }
             }
             """
@@ -810,7 +831,11 @@ def _build_logistics_graph_config(nodes: list, links: list, categories: list, da
             "data": [cat["name"] for cat in categories],
             "top": "60px",
             "orient": "horizontal",
-            "textStyle": {"fontSize": 11, "color": "#333"}
+            "textStyle": {
+                "fontSize": 11,
+                "color": "#1e293b",
+                "fontFamily": "Inter, system-ui, sans-serif"
+            }
         },
         "series": [{
             "type": "graph",
@@ -823,27 +848,27 @@ def _build_logistics_graph_config(nodes: list, links: list, categories: list, da
             "symbol": "circle",
             "focusNodeAdjacency": True,
             "force": {
-                "repulsion": 2000,
-                "gravity": 0.2,
-                "edgeLength": [100, 400],
+                "repulsion": 1800,
+                "gravity": 0.15,
+                "edgeLength": [120, 350],
                 "layoutAnimation": True
             },
             "emphasis": {
                 "focus": "adjacency",
-                "lineStyle": {"width": 15, "opacity": 1},
+                "lineStyle": {"width": 12, "opacity": 1},
                 "itemStyle": {
-                    "shadowBlur": 25,
-                    "shadowColor": "rgba(136,139,141,0.6)",
-                    "borderWidth": 6,
-                    "borderColor": "#D6DBD9"
+                    "shadowBlur": 20,
+                    "shadowColor": "rgba(30, 64, 175, 0.4)",
+                    "borderWidth": 5,
+                    "borderColor": "#ffffff"
                 }
             },
             "lineStyle": {
-                "curveness": 0.3,
-                "opacity": 0.9
+                "curveness": 0.25,
+                "opacity": 0.8
             }
         }],
-        "animationDuration": 4000,
+        "animationDuration": 2000,
         "animationEasingUpdate": "cubicOut"
     }
 
@@ -1055,8 +1080,8 @@ def render_delivery_summary(data: dict):
 
 
 def render_performance_metrics_chart(data: dict):
-    """Renderizar gráfico de métricas de rendimiento"""
-    st.markdown("#### 📊 Métricas de Rendimiento")
+    """Renderizar gráfico de métricas con diseño ejecutivo"""
+    st.markdown("#### 📊 Indicadores de Rendimiento")
 
     ruta = data.get('ruta_seleccionada', {})
     metrics_data = [
@@ -1069,21 +1094,34 @@ def render_performance_metrics_chart(data: dict):
 
     option = {
         "title": {
-            "text": "Scores de Rendimiento",
+            "text": "Scores Operacionales",
             "left": "center",
-            "textStyle": {"fontSize": 18, "fontWeight": "bold", "color": "#2D5016"}
+            "textStyle": {
+                "fontSize": 18,
+                "fontWeight": "600",
+                "color": "#1e293b",
+                "fontFamily": "Inter, system-ui, sans-serif"
+            }
         },
         "tooltip": {
             "trigger": "axis",
-            "formatter": "{b}: {c}%"
+            "formatter": "{b}: {c}%",
+            "backgroundColor": "#ffffff",
+            "borderColor": "#e2e8f0",
+            "borderWidth": 1,
+            "textStyle": {"color": "#1e293b", "fontFamily": "Inter, system-ui, sans-serif"}
         },
         "radar": {
             "indicator": [{"name": item["name"], "max": 100} for item in metrics_data],
             "shape": "polygon",
             "splitNumber": 5,
-            "axisName": {"color": "#2D5016"},
-            "splitLine": {"lineStyle": {"color": "#8B7355"}},
-            "splitArea": {"areaStyle": {"color": ["#F8F6F0", "#F0ECE0"]}}
+            "axisName": {
+                "color": "#1e293b",
+                "fontFamily": "Inter, system-ui, sans-serif",
+                "fontSize": 12
+            },
+            "splitLine": {"lineStyle": {"color": "#e2e8f0"}},
+            "splitArea": {"areaStyle": {"color": ["#f8fafc", "#ffffff"]}}
         },
         "series": [{
             "type": "radar",
@@ -1095,13 +1133,13 @@ def render_performance_metrics_chart(data: dict):
                         "type": "radial",
                         "x": 0.5, "y": 0.5, "r": 0.5,
                         "colorStops": [
-                            {"offset": 0, "color": "rgba(45, 80, 22, 0.3)"},
-                            {"offset": 1, "color": "rgba(139, 69, 19, 0.1)"}
+                            {"offset": 0, "color": "rgba(30, 64, 175, 0.3)"},
+                            {"offset": 1, "color": "rgba(59, 130, 246, 0.1)"}
                         ]
                     }
                 },
-                "lineStyle": {"color": "#2D5016", "width": 3},
-                "itemStyle": {"color": "#8B4513"}
+                "lineStyle": {"color": "#1e40af", "width": 3},
+                "itemStyle": {"color": "#3b82f6"}
             }]
         }]
     }
@@ -1257,7 +1295,7 @@ def render_process_timeline(data: dict):
     if candidatos and len(candidatos) > 1:
         st.markdown("### 🔄 Proceso de Evaluación de Candidatos")
         candidatos_timeline = []
-        for i, candidato in enumerate(candidatos[:5]):  # Limitar a 5 para visualización
+        for i, candidato in enumerate(candidatos[:5]):  # 5 para visualización
             ruta = candidato.get('ruta', {})
             score = candidato.get('score_lightgbm', 0)
             ranking = candidato.get('ranking_position', i + 1)
@@ -1312,20 +1350,19 @@ def render_process_timeline(data: dict):
 
 
 def render_factors_analysis(data: dict):
-    """Renderizar análisis de factores externos"""
-    st.markdown("#### 🎯 Análisis de Factores")
+    """Renderizar análisis de factores con paleta ejecutiva"""
+    st.markdown("#### 🎯 Análisis de Variables Externas")
 
     factores = data.get('explicabilidad', {}).get('factores_externos', {})
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**🌍 Condiciones Externas**")
+        st.markdown("**🌍 Condiciones Operacionales**")
         zona_seguridad = factores.get('zona_seguridad', 'N/A')
         clima = factores.get('condicion_clima', 'N/A')
         trafico = factores.get('trafico_nivel', 'N/A')
 
-        # Gráfico de factores con paleta contrastante
         factor_data = [
             {"name": "Demanda", "value": factores.get('factor_demanda', 1) * 100},
             {"name": "Clima", "value": 85 if clima == 'Templado_Seco' else 60},
@@ -1333,81 +1370,74 @@ def render_factors_analysis(data: dict):
             {"name": "Seguridad", "value": 40 if zona_seguridad == 'Roja' else 80}
         ]
 
-        contrast_pie_colors = ["#2D5016", "#8B4513", "#6D4C41", "#4A148C"]
+        executive_colors = ["#1e40af", "#3b82f6", "#0ea5e9", "#10b981"]
 
         option = {
             "title": {
-                "text": "Impacto de Factores",
-                "textStyle": {"fontSize": 14, "color": "#2D5016"}
+                "text": "Impacto Operacional",
+                "textStyle": {
+                    "fontSize": 16,
+                    "color": "#1e293b",
+                    "fontFamily": "Inter, system-ui, sans-serif",
+                    "fontWeight": "600"
+                }
             },
-            "tooltip": {"formatter": "{b}: {c}%"},
-            "color": contrast_pie_colors,
+            "tooltip": {
+                "formatter": "{b}: {c}%",
+                "backgroundColor": "#ffffff",
+                "borderColor": "#e2e8f0",
+                "textStyle": {"color": "#1e293b", "fontFamily": "Inter, system-ui, sans-serif"}
+            },
+            "color": executive_colors,
             "series": [{
                 "type": "pie",
-                "radius": ["30%", "70%"],
+                "radius": ["35%", "75%"],
                 "data": factor_data,
-                "emphasis": {"itemStyle": {"shadowBlur": 10}},
-                "label": {"fontSize": 10, "color": "#2D5016"}
+                "emphasis": {"itemStyle": {"shadowBlur": 15, "shadowColor": "rgba(0,0,0,0.1)"}},
+                "label": {
+                    "fontSize": 11,
+                    "color": "#1e293b",
+                    "fontFamily": "Inter, system-ui, sans-serif",
+                    "fontWeight": "500"
+                }
             }]
         }
         st_echarts(option, height="300px")
 
     with col2:
-        st.markdown("**📊 Impactos Calculados**")
+        st.markdown("**📊 Impactos Cuantificados**")
         tiempo_extra = factores.get('impacto_tiempo_extra_horas', 0)
         costo_extra = factores.get('impacto_costo_extra_pct', 0)
 
-        st.metric("⏰ Tiempo Extra", f"{tiempo_extra:.1f} horas")
-        st.metric("💰 Costo Extra", f"{costo_extra:.1f}%")
-        st.markdown(f"""
-        <div style='
-            background: #F8F6F0; 
-            padding: 1rem; 
-            border-radius: 8px; 
-            border-left: 4px solid #2D5016;
-            margin: 0.5rem 0;
-        '>
-            🌡️ <strong>Clima:</strong> {clima}
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric("⏰ Tiempo Adicional", f"{tiempo_extra:.1f} horas")
+        st.metric("💰 Incremento Costo", f"{costo_extra:.1f}%")
 
-        st.markdown(f"""
-        <div style='
-            background: #F8F6F0; 
-            padding: 1rem; 
-            border-radius: 8px; 
-            border-left: 4px solid #8B4513;
-            margin: 0.5rem 0;
-        '>
-            🚦 <strong>Tráfico:</strong> {trafico}
-        </div>
-        """, unsafe_allow_html=True)
+        render_status_card("🌡️", "Clima", clima, "#3b82f6")
+        render_status_card("🚦", "Tráfico", trafico, "#0ea5e9")
 
         if zona_seguridad == 'Roja':
-            st.markdown(f"""
-            <div style='
-                background: #F8F6F0; 
-                padding: 1rem; 
-                border-radius: 8px; 
-                border-left: 4px solid #BF360C;
-                margin: 0.5rem 0;
-            '>
-                🔴 <strong>Zona de Seguridad:</strong> {zona_seguridad}
-            </div>
-            """, unsafe_allow_html=True)
+            render_status_card("🔴", "Zona", zona_seguridad, "#ef4444")
         else:
-            st.markdown(f"""
-            <div style='
-                background: #F8F6F0; 
-                padding: 1rem; 
-                border-radius: 8px; 
-                border-left: 4px solid #1B4332;
-                margin: 0.5rem 0;
-            '>
-                🟢 <strong>Zona de Seguridad:</strong> {zona_seguridad}
-            </div>
-            """, unsafe_allow_html=True)
+            render_status_card("🟢", "Zona", zona_seguridad, "#10b981")
 
+def render_status_card(icon: str, title: str, value: str, color: str):
+    """Renderizar tarjeta de estado ejecutiva"""
+    st.markdown(f"""
+    <div style='
+        background: linear-gradient(135deg, {color}15, {color}08);
+        padding: 1rem; 
+        border-radius: 8px; 
+        border-left: 4px solid {color};
+        margin: 0.5rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    '>
+        <div style='display: flex; align-items: center; gap: 0.5rem;'>
+            <span style='font-size: 1.125rem;'>{icon}</span>
+            <strong style='color: #1e293b; font-family: Inter, system-ui, sans-serif;'>{title}:</strong>
+            <span style='color: #64748b; font-family: Inter, system-ui, sans-serif;'>{value}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 def render_technical_details(data: dict):
     """Renderizar detalles técnicos"""
