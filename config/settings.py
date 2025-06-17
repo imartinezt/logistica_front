@@ -1,6 +1,6 @@
 class Config:
     # API Configuration
-    API_BASE_URL = "http://0.0.0.0:8000"
+    API_BASE_URL = "https://dev-logistica-back-img-g7sc5y2jfa-uc.a.run.app"
     API_PREDICT_ENDPOINT = "/api/v1/fee/predict"
     API_TIMEOUT = 30
 
@@ -66,3 +66,6 @@ class Config:
         "animation_duration": 800,
         "shadow_color": "rgba(0, 0, 0, 0.1)"
     }
+
+    # Data Configuration
+    CSV_FOLDER = "utils/csv_files"

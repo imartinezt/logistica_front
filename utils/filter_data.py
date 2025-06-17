@@ -42,34 +42,43 @@ def load_csv_data(base_path: str) -> Dict[str, pd.DataFrame]:
 
     return dataframes
 
+
 def select_dataframe(dataframe_dict: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
-    Selecciona el dataframe a desplegar de una lista de dataframes
+    Selecciona el dataframe a desplegar de una lista de dataframes y permite calcular métricas.
 
     Args:
         dataframe_dict Dict[str]: Diccionario que contiene la lista de dataframes a usar
     """
 
     if not dataframe_dict:
-
-        st.warning("No se encontró ningun conjunto de datos para visualizar")
-
+        st.warning("No se encontró ningún conjunto de datos para visualizar.")
         return pd.DataFrame()
 
-    # Obtenemos los dataframes disponibles
     dataframes_names = dataframe_dict.keys()
-
-    # Seleccionamos un dataframe
     selected_name = st.selectbox("Seleccionar una lista de datos", dataframes_names)
 
     selected_df = dataframe_dict.get(selected_name)
 
     if selected_df is not None:
         st.subheader(f"💾 Datos del DataFrame: {selected_name}")
+        st.dataframe(selected_df.head())  # Muestra el head del DataFrame original
 
-        filtered_df = filter_dataframe(selected_df)
+        # Creamos una nueva sección para el DataFrame filtrado y las métricas
+        st.markdown("---")
+        st.write("### Opciones de Visualización y Análisis")
 
-        st.subheader(f"🛒 DataFrame Filtrado: {selected_name}")
+        # Usamos pestañas para organizar la visualización y las métricas
+        tab_filtered_df, tab_insights = st.tabs(["DataFrame Filtrado", "Análisis Estadístico"])
+
+        with tab_filtered_df:
+            st.subheader(f"🛒 DataFrame Filtrado: {selected_name}")
+            filtered_df = filter_dataframe(selected_df)
+            st.dataframe(filtered_df)
+
+        with tab_insights:
+            render_dataframe_insights(filtered_df, selected_name)
+
         return filtered_df
     else:
         st.warning("El DataFrame seleccionado no se encontró. Esto no debería ocurrir.")
@@ -114,6 +123,7 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
             # Variables catégoricas
             if isinstance(df[column], pd.CategoricalDtype) or df[column].nunique() < 10:
+                # if isinstance(df[column], pd.CategoricalDtype): # TODO Verificar que las variables categoricas sean correctamente  parseadas
                 user_cat_input = right.multiselect(
                     f"Valores para {column}",
                     df[column].unique(),
@@ -155,6 +165,110 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                     f"Substring or regex in {column}",
                 )
                 if user_text_input:
-                    df = df[df[column].astype(str).str.contains(user_text_input)]
+                    df = df[df[column].astype(str).str.contains(user_text_input, case=False)] # TODO: Case sensitive
 
     return df
+
+
+def render_dataframe_insights(df: pd.DataFrame, df_name: str):
+    """
+    Agrega una capa de información sobre el DataFrame para calcular y mostrar métricas.
+
+    Args:
+        df (pd.DataFrame): El DataFrame sobre el cual calcular las métricas
+        df_name (str): El nombre del DataFrame para referencia en el UI.
+    """
+    st.subheader(f"📈 Análisis de Métricas para {df_name}")
+
+    if df.empty:
+        st.info("El DataFrame está vacío. No se pueden calcular métricas.")
+        return
+
+    # Selección de columnas para analizar
+    all_columns = df.columns.tolist()
+    selected_columns = st.multiselect(
+        "Selecciona las columnas para analizar",
+        all_columns,
+        default=all_columns[:min(5, len(all_columns))]
+    )
+
+    if not selected_columns:
+        st.info("Por favor, selecciona al menos una columna para calcular métricas.")
+        return
+
+    # Definir métricas disponibles
+    numeric_metrics_options = [
+        "Media (Promedio)", "Mediana", "Moda", "Mínimo", "Máximo", "Conteo (No Nulos)",
+    ]
+    categorical_metrics_options = [
+        "Moda", "Conteo (No Nulos)", "Número de Valores Únicos",
+    ]
+
+    # Selección de métricas
+    st.markdown("---")
+    st.write("**Métricas a calcular:**")
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_numeric_metrics = st.multiselect(
+            "Métricas para columnas numéricas",
+            numeric_metrics_options,
+            default=["Media (Promedio)", "Mediana", "Mínimo", "Máximo", "Conteo (No Nulos)"]
+        )
+    with col2:
+        selected_categorical_metrics = st.multiselect(
+            "Métricas para columnas categóricas/texto",
+            categorical_metrics_options,
+            default=["Moda", "Número de Valores Únicos", "Conteo (No Nulos)"]
+        )
+
+    st.markdown("---")
+    metrics_results = {}
+
+    for col in selected_columns:
+        metrics_results[col] = {}
+        column_data = df[col]
+        metrics_results[col]["Conteo (No Nulos)"] = column_data.count()
+
+        if is_numeric_dtype(column_data):
+            if "Media (Promedio)" in selected_numeric_metrics:
+                metrics_results[col]["Media (Promedio)"] = column_data.mean()
+            if "Mediana" in selected_numeric_metrics:
+                metrics_results[col]["Mediana"] = column_data.median()
+            if "Moda" in selected_numeric_metrics:
+                mode_val = column_data.mode()
+                # ✅ SOLUCIÓN: Convertir la lista de modas a un string.
+                metrics_results[col]["Moda"] = ', '.join(map(str, mode_val)) if not mode_val.empty else "N/A"
+            if "Mínimo" in selected_numeric_metrics:
+                metrics_results[col]["Mínimo"] = column_data.min()
+            if "Máximo" in selected_numeric_metrics:
+                metrics_results[col]["Máximo"] = column_data.max()
+
+        elif is_object_dtype(column_data) or isinstance(column_data.dtype, pd.CategoricalDtype):
+            if "Moda" in selected_categorical_metrics:
+                mode_val = column_data.mode()
+                # ✅ SOLUCIÓN: Convertir la lista de modas a un string.
+                metrics_results[col]["Moda"] = ', '.join(map(str, mode_val)) if not mode_val.empty else "N/A"
+            if "Número de Valores Únicos" in selected_categorical_metrics:
+                metrics_results[col]["Número de Valores Únicos"] = column_data.nunique()
+
+        elif is_datetime64_any_dtype(column_data):
+            if "Mínimo" in selected_numeric_metrics:
+                metrics_results[col]["Fecha Más Temprana"] = column_data.min()
+            if "Máximo" in selected_numeric_metrics:
+                metrics_results[col]["Fecha Más Tardia"] = column_data.max()
+
+    # Convertir los resultados a un DataFrame para una mejor visualización
+    if not metrics_results:
+        st.info("No se calcularon métricas con las selecciones actuales.")
+        return
+
+    metrics_df = pd.DataFrame.from_dict(metrics_results, orient='index')
+    metrics_df.index.name = "Columna"
+
+    # Reorganizar columnas
+    general_cols = ["Conteo (No Nulos)"]
+    other_cols = [col for col in metrics_df.columns if col not in general_cols]
+    final_cols_order = general_cols + sorted(other_cols)
+    metrics_df = metrics_df.reindex(columns=final_cols_order).T  # Transponer
+
+    st.dataframe(metrics_df.fillna('').astype(str), use_container_width=True)

@@ -8,7 +8,7 @@ from utils.helpers import (
 )
 
 from utils.filter_data import select_dataframe, load_csv_data
-import pandas as pd
+
 
 def calcular_llegada_relativa(fecha_compra_str: str, fecha_entrega_str: str) -> str:
     """Calcular cuándo llega el pedido de forma relativa a la fecha de compra"""
@@ -1485,4 +1485,4 @@ def render_csv_data(csv_directory: str):
 
     selected_and_filtered_df = select_dataframe(dataframes_disponibles)
 
-    st.dataframe(selected_and_filtered_df)
+    # st.dataframe(selected_and_filtered_df)
