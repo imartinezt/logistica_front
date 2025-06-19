@@ -195,8 +195,16 @@ def render_interactive_charts(data: dict):
 
 
 def render_delivery_route_graph(data: dict):
-    """Crear red dinámica ADAPTADA AL NUEVO RESPONSE - VERSION CORREGIDA Y ROBUSTA"""
+    """Crear red dinámica ADAPTADA AL NUEVO RESPONSE - VERSION MEJORADA PARA TODOS LOS TIPOS"""
     st.markdown("#### 🎯 Red Logística Centrada en Destino")
+
+    tipo_respuesta = data.get('tipo_respuesta', 'single_delivery_date')
+    multiple_options = data.get('multiple_delivery_options', False)
+
+    if multiple_options and data.get('delivery_options'):
+        render_multiple_delivery_options_graph(data)
+        return
+
     render_delivery_summary(data)
 
     try:
@@ -205,7 +213,8 @@ def render_delivery_route_graph(data: dict):
         logistica = data.get('logistica_entrega', {})
         evaluacion_detallada = data.get('evaluacion_detallada', {})
         stock_analysis = evaluacion_detallada.get('stock_analysis', {})
-        cedis_analysis = evaluacion_detallada.get('cedis_analysis')  # Puede ser None
+        cedis_analysis = evaluacion_detallada.get('cedis_analysis')
+
         nodes = []
         links = []
         categories = _get_graph_categories()
@@ -220,36 +229,35 @@ def render_delivery_route_graph(data: dict):
         product_node = _create_product_node(request_data)
         nodes.append(product_node)
 
-        # 3. TIENDAS CON STOCK DISPONIBLE (PRINCIPAL)
+        # 3. TIENDAS CON STOCK DISPONIBLE
         stock_nodes, stock_links = _create_stock_stores_from_response(stock_analysis, product_node['name'])
         nodes.extend(stock_nodes)
         links.extend(stock_links)
 
-        # 4. TIENDAS CERCANAS SIN STOCK (OPCIONAL)
+        # 4. TIENDAS CERCANAS SIN STOCK
         nearby_nodes, nearby_links = _create_nearby_stores_from_response(stock_analysis, destination_node_name)
         nodes.extend(nearby_nodes)
         links.extend(nearby_links)
 
-        # 5. RUTA LOGÍSTICA (DIRECTO O VÍA CEDIS)
-        route_nodes, route_links = _create_logistics_route_from_response_with_distances(
-            logistica, cedis_analysis, stock_nodes, destination_node_name
+        # 5. RUTA LOGÍSTICA (MEJORADA)
+        route_nodes, route_links = _create_logistics_route_enhanced(
+            logistica, cedis_analysis, stock_nodes, destination_node_name, data
         )
         nodes.extend(route_nodes)
         links.extend(route_links)
 
-        # 6. FACTORES EXTERNOS
-        factor_nodes, factor_links = _create_external_factors_from_response(
-            factores_externos, destination_node_name
+        # 6. FACTORES EXTERNOS (MEJORADOS)
+        factor_nodes, factor_links = _create_external_factors_enhanced(
+            factores_externos, destination_node_name, request_data
         )
         nodes.extend(factor_nodes)
         links.extend(factor_links)
 
-        # Verificar que tenemos datos suficientes
+        # Verificar datos suficientes
         if len(nodes) < 2:
             st.warning("⚠️ Datos insuficientes para generar el gráfico de red")
             render_debug_info(data)
             return
-
 
         option = _build_graph_config(nodes, links, categories, codigo_postal)
         st_echarts(option, height="900px", key="logistics_network_centered")
@@ -259,6 +267,429 @@ def render_delivery_route_graph(data: dict):
         st.error(f"Error generando gráfico de red: {str(e)}")
         render_debug_info(data)
         render_simple_fallback_graph(data)
+
+
+def render_multiple_delivery_options_graph(data: dict):
+    """Renderizar gráfico para múltiples opciones de entrega"""
+    st.markdown("### 🔄 Análisis de Múltiples Opciones de Entrega")
+
+    delivery_options = data.get('delivery_options', [])
+    recommendation = data.get('recommendation', {})
+    total_options = data.get('total_options', len(delivery_options))
+
+    # Información general
+    st.info(
+        f"📊 **{total_options} opciones** de entrega evaluadas | **Recomendación:** {recommendation.get('opcion', 'N/A').title()}")
+
+    # Crear tabs para cada opción
+    if delivery_options:
+        tab_names = []
+        for i, opt in enumerate(delivery_options):
+            opcion_name = opt.get('opcion', f'Opción {i + 1}').replace('_', ' ').title()
+            is_recommended = opt.get('opcion') == recommendation.get('opcion')
+            tab_names.append(f"{'🏆' if is_recommended else '📦'} {opcion_name}")
+
+        tabs = st.tabs(tab_names)
+
+        for i, (tab, option) in enumerate(zip(tabs, delivery_options)):
+            with tab:
+                is_recommended = option.get('opcion') == recommendation.get('opcion')
+                render_single_delivery_option_graph(option, data, is_recommended, i)
+
+    # Comparación consolidada
+    render_delivery_options_comparison(delivery_options, recommendation)
+
+
+def render_single_delivery_option_graph(option: dict, full_data: dict, is_recommended: bool, option_index: int):
+    """Renderizar gráfico para una opción específica de entrega"""
+
+    if is_recommended:
+        st.success(f"🏆 **OPCIÓN RECOMENDADA:** {option.get('descripcion', 'N/A')}")
+    else:
+        st.info(f"📦 **Opción Alternativa:** {option.get('descripcion', 'N/A')}")
+
+    try:
+        request_data = full_data.get('request', {})
+        factores_externos = full_data.get('factores_externos', {})
+
+        nodes = []
+        links = []
+        categories = _get_graph_categories()
+
+        # 1. NODO DESTINO
+        codigo_postal = request_data.get('codigo_postal', 'N/A')
+        destination_node = _create_central_destination_node(codigo_postal)
+        nodes.append(destination_node)
+        destination_node_name = destination_node['name']
+
+        # 2. NODO PRODUCTO
+        product_node = _create_product_node(request_data)
+        nodes.append(product_node)
+
+        # 3. TIENDAS ORIGEN (de la opción específica)
+        tiendas_origen = option.get('tiendas_origen', [])
+        origen_nodes, origen_links = _create_option_stores_nodes(tiendas_origen, product_node['name'])
+        nodes.extend(origen_nodes)
+        links.extend(origen_links)
+
+        # 4. RUTA LOGÍSTICA DE LA OPCIÓN
+        logistica_option = option.get('logistica', {})
+        route_nodes, route_links = _create_option_logistics_route(
+            logistica_option, origen_nodes, destination_node_name, option
+        )
+        nodes.extend(route_nodes)
+        links.extend(route_links)
+
+        # 5. FACTORES ESPECÍFICOS DE LA OPCIÓN
+        factor_nodes, factor_links = _create_option_factors(
+            factores_externos, destination_node_name, option
+        )
+        nodes.extend(factor_nodes)
+        links.extend(factor_links)
+
+        # Generar gráfico
+        if len(nodes) >= 2:
+            option_config = _build_option_graph_config(nodes, links, categories, option, codigo_postal)
+            st_echarts(option_config, height="700px", key=f"option_graph_{option_index}")
+
+            # Métricas de la opción
+            _render_option_metrics(option, codigo_postal)
+        else:
+            st.warning("⚠️ Datos insuficientes para esta opción")
+
+    except Exception as e:
+        st.error(f"Error en gráfico de opción: {str(e)}")
+
+
+def _create_option_stores_nodes(tiendas_origen: list, product_node_name: str):
+    """Crear nodos de tiendas origen para una opción específica"""
+    nodes = []
+    links = []
+
+    for i, tienda_nombre in enumerate(tiendas_origen):
+        # Determinar tipo de tienda
+        es_local = 'Santa Fe' in tienda_nombre or 'Centro' in tienda_nombre
+        color = "#10b981" if es_local else "#3b82f6"
+
+        store_node = {
+            "name": f"🏪 {tienda_nombre}",
+            "value": 80,
+            "symbolSize": 80,
+            "category": 2,
+            "itemStyle": {
+                "color": color,
+                "borderColor": "#ffffff",
+                "borderWidth": 4
+            },
+            "label": {"show": True, "fontSize": 12, "fontWeight": "600"},
+            "tooltip": f"🏪 TIENDA ORIGEN\\nNombre: {tienda_nombre}\\n{'🏠 Local' if es_local else '🌍 Nacional'}"
+        }
+        nodes.append(store_node)
+
+        # Enlace producto → tienda
+        link = {
+            "source": product_node_name,
+            "target": f"🏪 {tienda_nombre}",
+            "lineStyle": {"color": color, "width": 6},
+            "label": {"show": True, "formatter": "📦 Stock", "fontSize": 11}
+        }
+        links.append(link)
+
+    return nodes, links
+
+
+
+def _create_option_logistics_route(logistica_option: dict, origen_nodes: list, destination_node_name: str,
+                                   option: dict):
+    """Crear ruta logística para una opción específica"""
+    nodes = []
+    links = []
+
+    if not origen_nodes:
+        return nodes, links
+
+    try:
+        tipo_ruta = logistica_option.get('tipo_ruta', '')
+        flota = logistica_option.get('flota', 'N/A')
+        tiempo_total = logistica_option.get('tiempo_total_h', 0)
+
+        # HUB de consolidación si existe
+        hub_consolidacion = logistica_option.get('hub_consolidacion')
+        if hub_consolidacion:
+            hub_node = {
+                "name": f"🏭 {hub_consolidacion}",
+                "value": 90,
+                "symbolSize": 85,
+                "category": 4,
+                "itemStyle": {"color": "#6366f1", "borderWidth": 4, "borderColor": "#ffffff"},
+                "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                "tooltip": f"🏭 HUB CONSOLIDACIÓN\\nNombre: {hub_consolidacion}\\nTipo: {tipo_ruta}"
+            }
+            nodes.append(hub_node)
+
+            # Enlaces tiendas → hub
+            for origen_node in origen_nodes:
+                link = {
+                    "source": origen_node['name'],
+                    "target": f"🏭 {hub_consolidacion}",
+                    "lineStyle": {"color": "#6366f1", "width": 5},
+                    "label": {"show": True, "formatter": "📦 Consolidar", "fontSize": 10}
+                }
+                links.append(link)
+
+            current_node = f"🏭 {hub_consolidacion}"
+        else:
+            current_node = origen_nodes[0]['name'] if origen_nodes else "Origen"
+
+        # CEDIS intermedio si existe
+        cedis_intermedio = logistica_option.get('cedis_intermedio')
+        if cedis_intermedio:
+            cedis_node = {
+                "name": f"🏭 {cedis_intermedio}",
+                "value": 85,
+                "symbolSize": 80,
+                "category": 4,
+                "itemStyle": {"color": "#8b5cf6", "borderWidth": 4, "borderColor": "#ffffff"},
+                "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                "tooltip": f"🏭 CEDIS INTERMEDIO\\nNombre: {cedis_intermedio}\\nSegmentos: {logistica_option.get('segmentos', 1)}"
+            }
+            nodes.append(cedis_node)
+
+            link = {
+                "source": current_node,
+                "target": f"🏭 {cedis_intermedio}",
+                "lineStyle": {"color": "#8b5cf6", "width": 6},
+                "label": {"show": True, "formatter": "🚚 Vía CEDIS", "fontSize": 10}
+            }
+            links.append(link)
+            current_node = f"🏭 {cedis_intermedio}"
+
+        # Flota final
+        flota_color = "#3b82f6" if 'FI' in flota else "#8b5cf6"
+        flota_icon = "🚚" if 'FI' in flota else "🚛"
+
+        flota_node = {
+            "name": f"{flota_icon} {flota}",
+            "value": 85,
+            "symbolSize": 75,
+            "category": 5,
+            "itemStyle": {"color": flota_color, "borderWidth": 4, "borderColor": "#ffffff"},
+            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+            "tooltip": f"{flota_icon} FLOTA FINAL\\nTipo: {flota}\\nTiempo: {tiempo_total:.1f}h\\nCosto: ${option.get('costo_envio', 0):,.2f}"
+        }
+        nodes.append(flota_node)
+
+        # Enlaces finales
+        link = {
+            "source": current_node,
+            "target": f"{flota_icon} {flota}",
+            "lineStyle": {"color": flota_color, "width": 7},
+            "label": {"show": True, "formatter": "🚚 Recogida", "fontSize": 10}
+        }
+        links.append(link)
+
+        link_final = {
+            "source": f"{flota_icon} {flota}",
+            "target": destination_node_name,
+            "lineStyle": {"color": "#1e40af", "width": 10, "shadowBlur": 15},
+            "label": {
+                "show": True,
+                "formatter": f"🎯 Entrega ({tiempo_total:.1f}h)",
+                "fontSize": 13,
+                "fontWeight": "bold",
+                "color": "#1e40af"
+            }
+        }
+        links.append(link_final)
+
+    except Exception as e:
+        st.error(f"Error creando ruta de opción: {str(e)}")
+
+    return nodes, links
+
+
+def _create_option_factors(factores_externos: dict, destination_node_name: str, option: dict):
+    """Crear factores específicos para una opción"""
+    nodes = []
+    links = []
+
+    try:
+        probabilidad = option.get('probabilidad_cumplimiento', 0)
+        costo = option.get('costo_envio', 0)
+        tipo_entrega = option.get('tipo_entrega', 'STANDARD')
+
+        # Factor de probabilidad
+        prob_color = "#10b981" if probabilidad >= 0.8 else "#f59e0b" if probabilidad >= 0.6 else "#ef4444"
+        prob_node = {
+            "name": f"📊 Prob. {probabilidad:.0%}",
+            "value": 60,
+            "symbolSize": 60,
+            "category": 7,
+            "itemStyle": {"color": prob_color},
+            "label": {"show": True, "fontSize": 10},
+            "tooltip": f"📊 PROBABILIDAD CUMPLIMIENTO\\n{probabilidad:.1%} de éxito\\nTipo: {tipo_entrega}"
+        }
+        nodes.append(prob_node)
+
+        link = {
+            "source": f"📊 Prob. {probabilidad:.0%}",
+            "target": destination_node_name,
+            "lineStyle": {"color": prob_color, "width": 4, "type": "dashed"},
+            "label": {"show": True, "formatter": "Riesgo", "fontSize": 9}
+        }
+        links.append(link)
+
+        # Factor de costo si es relevante
+        if costo > 1000:
+            costo_node = {
+                "name": f"💰 ${costo:,.0f}",
+                "value": 55,
+                "symbolSize": 55,
+                "category": 7,
+                "itemStyle": {"color": "#f59e0b"},
+                "label": {"show": True, "fontSize": 10},
+                "tooltip": f"💰 COSTO ELEVADO\\n${costo:,.2f}\\nImpacto financiero"
+            }
+            nodes.append(costo_node)
+
+            link = {
+                "source": f"💰 ${costo:,.0f}",
+                "target": destination_node_name,
+                "lineStyle": {"color": "#f59e0b", "width": 3, "type": "dashed"},
+                "label": {"show": True, "formatter": "Costo", "fontSize": 9}
+            }
+            links.append(link)
+
+    except Exception as e:
+        st.error(f"Error creando factores de opción: {str(e)}")
+
+    return nodes, links
+
+
+def _create_logistics_route_enhanced(logistica: dict, cedis_analysis, stock_nodes: list, destination_node_name: str,
+                                     full_data: dict):
+    """Crear ruta logística MEJORADA con mejor detección de CEDIS"""
+    nodes = []
+    links = []
+
+    if not stock_nodes:
+        return nodes, links
+
+    try:
+        current_node = stock_nodes[0]['name']
+        tipo_ruta = logistica.get('tipo_ruta', '')
+        carrier = logistica.get('carrier', 'N/A')
+        flota = logistica.get('flota', 'N/A')
+        distancia_total = logistica.get('distancia_km', 0)
+        cedis_intermedio = logistica.get('cedis_intermedio')
+
+        # DETECTAR USO DE CEDIS (MEJORADO)
+        usa_cedis = (
+                'cedis' in tipo_ruta.lower() or
+                cedis_intermedio is not None or
+                'compleja' in tipo_ruta.lower() or
+                (cedis_analysis and isinstance(cedis_analysis, dict) and cedis_analysis.get('cedis_seleccionado'))
+        )
+
+        # RUTA VÍA CEDIS
+        if usa_cedis:
+            cedis_info = None
+
+            # Prioridad 1: CEDIS del análisis detallado
+            if cedis_analysis and isinstance(cedis_analysis, dict):
+                cedis_seleccionado = cedis_analysis.get('cedis_seleccionado', {})
+                if cedis_seleccionado:
+                    cedis_info = cedis_seleccionado
+
+            # Prioridad 2: CEDIS de logística
+            elif cedis_intermedio:
+                cedis_info = {
+                    'nombre': cedis_intermedio,
+                    'distancia_origen_cedis_km': distancia_total * 0.6,
+                    'distancia_cedis_destino_km': distancia_total * 0.4,
+                    'score': 0,
+                    'tiempo_procesamiento_h': 4.0
+                }
+
+            if cedis_info:
+                cedis_nombre = cedis_info.get('nombre', 'CEDIS')
+                dist_origen_cedis = cedis_info.get('distancia_origen_cedis_km', 0)
+                dist_cedis_destino = cedis_info.get('distancia_cedis_destino_km', 0)
+
+                # Crear nodo CEDIS
+                cedis_node = {
+                    "name": f"🏭 {cedis_nombre}",
+                    "value": 80,
+                    "symbolSize": 85,
+                    "category": 4,
+                    "itemStyle": {"color": "#6366f1", "borderWidth": 4, "borderColor": "#ffffff"},
+                    "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+                    "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {cedis_nombre}\\nScore: {cedis_info.get('score', 0):.2f}\\nProcesamiento: {cedis_info.get('tiempo_procesamiento_h', 0):.1f}h"
+                }
+                nodes.append(cedis_node)
+
+                # Enlace tienda → CEDIS
+                links.append({
+                    "source": current_node,
+                    "target": f"🏭 {cedis_nombre}",
+                    "lineStyle": {"color": "#6366f1", "width": 6},
+                    "label": {"show": True, "formatter": f"📦 {dist_origen_cedis:.0f}km", "fontSize": 11}
+                })
+
+                current_node = f"🏭 {cedis_nombre}"
+                distancia_restante = dist_cedis_destino
+            else:
+                distancia_restante = distancia_total
+        else:
+            # Ruta directa
+            distancia_restante = distancia_total
+
+        # CREAR NODO DE FLOTA/CARRIER
+        flota_icon = "🚚" if 'FI' in flota else "🚛"
+        flota_color = "#3b82f6" if 'FI' in flota else "#8b5cf6"
+        flota_category = 5 if 'FI' in flota else 6
+
+        flota_node = {
+            "name": f"{flota_icon} {carrier}",
+            "value": 90,
+            "symbolSize": 80,
+            "category": flota_category,
+            "itemStyle": {"color": flota_color, "borderWidth": 4, "borderColor": "#ffffff"},
+            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
+            "tooltip": f"{flota_icon} FLOTA\\nCarrier: {carrier}\\nTipo: {flota}\\nTiempo: {logistica.get('tiempo_total_h', 0):.1f}h\\nDistancia: {distancia_total:.1f}km"
+        }
+        nodes.append(flota_node)
+
+        # Enlaces finales
+        links.append({
+            "source": current_node,
+            "target": f"{flota_icon} {carrier}",
+            "lineStyle": {"color": flota_color, "width": 7},
+            "label": {"show": True, "formatter": "🚚 Recogida", "fontSize": 10}
+        })
+
+        links.append({
+            "source": f"{flota_icon} {carrier}",
+            "target": destination_node_name,
+            "lineStyle": {
+                "color": "#1e40af",
+                "width": 10,
+                "shadowBlur": 15,
+                "shadowColor": "rgba(30, 64, 175, 0.4)"
+            },
+            "label": {
+                "show": True,
+                "formatter": f"🎯 {distancia_restante:.0f}km",
+                "fontSize": 13,
+                "fontWeight": "bold",
+                "color": "#1e40af"
+            }
+        })
+
+    except Exception as e:
+        st.error(f"Error creando ruta logística mejorada: {str(e)}")
+
+    return nodes, links
 
 
 def _create_stock_stores_from_response(stock_analysis: dict, product_node_name: str):
@@ -325,111 +756,231 @@ def _create_stock_stores_from_response(stock_analysis: dict, product_node_name: 
     return nodes, links
 
 
-def _create_logistics_route_from_response_with_distances(logistica: dict, cedis_analysis, stock_nodes: list,
-                                                         destination_node_name: str):
-    """Crear ruta logística CON DISTANCIAS en los enlaces - para charts.py"""
+def _create_external_factors_enhanced(factores_externos: dict, destination_node_name: str, request_data: dict):
+    """Crear factores externos MEJORADOS con mapeo específico del CP"""
     nodes = []
     links = []
 
-    if not stock_nodes:
-        return nodes, links
-
     try:
-        current_node = stock_nodes[0]['name']
-        tipo_ruta = logistica.get('tipo_ruta', '')
-        carrier = logistica.get('carrier', 'N/A')
-        flota = logistica.get('flota', 'N/A')
-        distancia_total = logistica.get('distancia_km', 0)
+        # Obtener CP específico
+        codigo_postal = request_data.get('codigo_postal', destination_node_name.replace('🎯 CP ', ''))
+        zona_seguridad = factores_externos.get('zona_seguridad', 'N/A')
+        trafico = factores_externos.get('trafico_nivel', 'N/A')
+        clima = factores_externos.get('condicion_clima', 'N/A')
+        evento = factores_externos.get('evento_detectado', 'Normal')
+        factor_demanda = factores_externos.get('factor_demanda', 1.0)
 
-        # CASO 1: RUTA VÍA CEDIS
-        if 'cedis' in tipo_ruta.lower() and cedis_analysis and isinstance(cedis_analysis, dict):
-            cedis_seleccionado = cedis_analysis.get('cedis_seleccionado', {})
-
-            if cedis_seleccionado:
-                cedis_nombre = cedis_seleccionado.get('nombre', 'CEDIS')
-                dist_origen_cedis = cedis_seleccionado.get('distancia_origen_cedis_km', 0)
-                dist_cedis_destino = cedis_seleccionado.get('distancia_cedis_destino_km', 0)
-
-                # Crear nodo CEDIS
-                cedis_node = {
-                    "name": f"🏭 {cedis_nombre}",
-                    "value": 80,
-                    "symbolSize": 85,
-                    "category": 4,
-                    "itemStyle": {
-                        "color": "#6366f1",
-                        "borderWidth": 4,
-                        "borderColor": "#ffffff"
-                    },
-                    "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
-                    "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {cedis_nombre}\\nScore: {cedis_seleccionado.get('score', 0):.2f}"
-                }
-                nodes.append(cedis_node)
-
-                # Enlace tienda → CEDIS CON DISTANCIA
-                links.append({
-                    "source": current_node,
-                    "target": f"🏭 {cedis_nombre}",
-                    "lineStyle": {"color": "#6366f1", "width": 6},
-                    "label": {"show": True, "formatter": f"📦 {dist_origen_cedis:.0f}km", "fontSize": 11}
-                })
-
-                current_node = f"🏭 {cedis_nombre}"
-                distancia_restante = dist_cedis_destino
-        else:
-            # Ruta directa
-            distancia_restante = distancia_total
-
-        # CASO 2: CREAR NODO DE FLOTA/CARRIER
-        flota_icon = "🚚" if 'FI' in flota else "🚛"
-        flota_color = "#3b82f6" if 'FI' in flota else "#8b5cf6"
-        flota_category = 5 if 'FI' in flota else 6
-
-        flota_node = {
-            "name": f"{flota_icon} {carrier}",
-            "value": 90,
-            "symbolSize": 80,
-            "category": flota_category,
-            "itemStyle": {
-                "color": flota_color,
-                "borderWidth": 4,
-                "borderColor": "#ffffff"
-            },
-            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
-            "tooltip": f"{flota_icon} FLOTA\\nCarrier: {carrier}\\nTipo: {flota}\\nTiempo: {logistica.get('tiempo_total_h', 0):.1f}h"
+        # NODO CENTRAL DE FACTORES DEL CP
+        cp_factors_node = {
+            "name": f"📍 Factores CP {codigo_postal}",
+            "value": 75,
+            "symbolSize": 75,
+            "category": 7,
+            "itemStyle": {"color": "#f59e0b", "borderWidth": 3, "borderColor": "#ffffff"},
+            "label": {"show": True, "fontSize": 11, "fontWeight": "600"},
+            "tooltip": f"📍 FACTORES ESPECÍFICOS CP {codigo_postal}\\n🛡️ Zona: {zona_seguridad}\\n🚦 Tráfico: {trafico}\\n🌤️ Clima: {clima}\\n📊 Demanda: {factor_demanda}x\\n🎉 Evento: {evento}"
         }
-        nodes.append(flota_node)
+        nodes.append(cp_factors_node)
 
-        # Enlaces finales CON DISTANCIAS
-        links.append({
-            "source": current_node,
-            "target": f"{flota_icon} {carrier}",
-            "lineStyle": {"color": flota_color, "width": 7},
-            "label": {"show": True, "formatter": "🚚 Recogida", "fontSize": 10}
-        })
-
-        links.append({
-            "source": f"{flota_icon} {carrier}",
+        # Enlace principal factores → destino
+        factor_link = {
+            "source": f"📍 Factores CP {codigo_postal}",
             "target": destination_node_name,
-            "lineStyle": {
-                "color": "#1e40af",
-                "width": 10,
-                "shadowBlur": 15,
-                "shadowColor": "rgba(30, 64, 175, 0.4)"
-            },
-            "label": {
-                "show": True,
-                "formatter": f"🎯 {distancia_restante:.0f}km",
-                "fontSize": 13,
-                "fontWeight": "bold",
-                "color": "#1e40af"
+            "lineStyle": {"color": "#f59e0b", "width": 8, "shadowBlur": 10},
+            "label": {"show": True, "formatter": "Impacto Local", "fontSize": 12, "fontWeight": "bold"}
+        }
+        links.append(factor_link)
+
+        # FACTORES ESPECÍFICOS RELEVANTES
+        relevant_factors = []
+
+        if trafico in ['Alto', 'Crítico']:
+            relevant_factors.append({
+                "name": f"🚦 Tráfico {trafico}",
+                "color": "#f59e0b",
+                "impact": f"🚗 Tráfico {trafico}\\nImpacto en tiempo de entrega"
+            })
+
+        if zona_seguridad in ['Amarilla', 'Roja']:
+            color = "#f59e0b" if zona_seguridad == 'Amarilla' else "#ef4444"
+            relevant_factors.append({
+                "name": f"🛡️ Zona {zona_seguridad}",
+                "color": color,
+                "impact": f"⚠️ Zona {zona_seguridad}\\nRequiere precauciones especiales"
+            })
+
+        if factor_demanda > 1.5:
+            relevant_factors.append({
+                "name": f"📈 Demanda Alta",
+                "color": "#8b5cf6",
+                "impact": f"📊 Factor demanda: {factor_demanda}x\\nTemporada de alta demanda"
+            })
+
+        if evento != 'Normal':
+            relevant_factors.append({
+                "name": f"🎉 {evento}",
+                "color": "#0ea5e9",
+                "impact": f"🎄 Evento especial: {evento}\\nImpacto en operaciones"
+            })
+
+        if 'Lluvioso' in clima or 'Frio' in clima:
+            relevant_factors.append({
+                "name": f"🌤️ {clima}",
+                "color": "#06b6d4",
+                "impact": f"🌡️ Condición: {clima}\\nPuede afectar tiempos"
+            })
+
+        # Crear nodos y enlaces para factores relevantes
+        for factor in relevant_factors:
+            factor_node = {
+                "name": factor["name"],
+                "value": 50,
+                "symbolSize": 50,
+                "category": 7,
+                "itemStyle": {"color": factor["color"], "borderWidth": 2, "borderColor": "#ffffff"},
+                "label": {"show": True, "fontSize": 10},
+                "tooltip": factor["impact"]
             }
-        })
+            nodes.append(factor_node)
+
+            # Enlace factor específico → factores del CP
+            factor_link = {
+                "source": factor["name"],
+                "target": f"📍 Factores CP {codigo_postal}",
+                "lineStyle": {"color": factor["color"], "width": 3, "type": "dashed", "opacity": 0.7},
+                "label": {"show": True, "formatter": "Contribuye", "color": factor["color"], "fontSize": 8}
+            }
+            links.append(factor_link)
 
     except Exception as e:
-        st.error(f"Error creando ruta logística: {str(e)}")
+        st.error(f"Error creando factores mejorados: {str(e)}")
 
     return nodes, links
+
+
+def _build_option_graph_config(nodes: list, links: list, categories: list, option: dict, codigo_postal: str):
+    """Configuración de gráfico para una opción específica"""
+    opcion_name = option.get('opcion', 'Opción').replace('_', ' ').title()
+    tipo_entrega = option.get('tipo_entrega', 'STANDARD')
+
+    return {
+        "title": {
+            "text": f"🎯 {opcion_name} → CP {codigo_postal}",
+            "subtext": f"Tipo: {tipo_entrega} | Costo: ${option.get('costo_envio', 0):,.0f} | Prob: {option.get('probabilidad_cumplimiento', 0):.0%}",
+            "top": "15px",
+            "left": "center",
+            "textStyle": {"fontSize": 18, "fontWeight": "600", "color": "#1e293b"},
+            "subtextStyle": {"fontSize": 11, "color": "#64748b"}
+        },
+        "tooltip": {
+            "trigger": "item",
+            "backgroundColor": "#ffffff",
+            "borderColor": "#e2e8f0",
+            "borderWidth": 1,
+            "borderRadius": 8,
+            "textStyle": {"color": "#1e293b", "fontSize": 12}
+        },
+        "legend": {
+            "data": [cat["name"] for cat in categories],
+            "top": "50px",
+            "orient": "horizontal",
+            "textStyle": {"fontSize": 10, "color": "#1e293b"}
+        },
+        "series": [{
+            "type": "graph",
+            "layout": "force",
+            "data": nodes,
+            "links": links,
+            "categories": categories,
+            "roam": True,
+            "draggable": True,
+            "symbol": "circle",
+            "focusNodeAdjacency": True,
+            "force": {
+                "repulsion": 1500,
+                "gravity": 0.2,
+                "edgeLength": [100, 300],
+                "layoutAnimation": True
+            },
+            "emphasis": {
+                "focus": "adjacency",
+                "lineStyle": {"width": 10, "opacity": 1},
+                "itemStyle": {"shadowBlur": 15, "borderWidth": 4}
+            },
+            "lineStyle": {"curveness": 0.2, "opacity": 0.8}
+        }],
+        "animationDuration": 1500
+    }
+
+
+def _render_option_metrics(option: dict, codigo_postal: str):
+    """Renderizar métricas específicas de una opción"""
+    st.markdown(f"### 📊 Métricas - {option.get('opcion', 'Opción').replace('_', ' ').title()}")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        costo = option.get('costo_envio', 0)
+        st.metric("💰 Costo Envío", f"${costo:,.2f}")
+
+    with col2:
+        prob = option.get('probabilidad_cumplimiento', 0)
+        st.metric("📈 Probabilidad", f"{prob:.1%}")
+
+    with col3:
+        fecha_entrega = option.get('fecha_entrega', 'N/A')
+        if 'T' in str(fecha_entrega):
+            fecha_display = fecha_entrega.split('T')[0]
+        else:
+            fecha_display = str(fecha_entrega)
+        st.metric("📅 Fecha Entrega", fecha_display)
+
+    with col4:
+        tiempo = option.get('logistica', {}).get('tiempo_total_h', 0)
+        st.metric("⏱️ Tiempo Total", f"{tiempo:.1f}h")
+
+
+def render_delivery_options_comparison(delivery_options: list, recommendation: dict):
+    """Renderizar tabla comparativa de todas las opciones"""
+    st.markdown("### 📊 Comparación de Opciones")
+
+    import pandas as pd
+
+    comparison_data = []
+    for i, option in enumerate(delivery_options):
+        is_recommended = option.get('opcion') == recommendation.get('opcion')
+
+        comparison_data.append({
+            'Opción': option.get('opcion', f'Opción {i + 1}').replace('_', ' ').title(),
+            'Descripción': option.get('descripcion', 'N/A'),
+            'Tipo Entrega': option.get('tipo_entrega', 'N/A'),
+            'Fecha Entrega': option.get('fecha_entrega', 'N/A').split('T')[0] if 'T' in str(
+                option.get('fecha_entrega', '')) else option.get('fecha_entrega', 'N/A'),
+            'Costo ($)': f"{option.get('costo_envio', 0):,.2f}",
+            'Probabilidad': f"{option.get('probabilidad_cumplimiento', 0):.1%}",
+            'Tiempo (h)': f"{option.get('logistica', {}).get('tiempo_total_h', 0):.1f}",
+            'Tiendas Origen': ', '.join(option.get('tiendas_origen', [])),
+            'Recomendada': '🏆 SÍ' if is_recommended else '❌ No'
+        })
+
+    df_comparison = pd.DataFrame(comparison_data)
+    st.dataframe(df_comparison, use_container_width=True)
+
+    # Métricas consolidadas
+    st.markdown("#### 📈 Resumen Comparativo")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        costos = [opt.get('costo_envio', 0) for opt in delivery_options]
+        st.metric("💰 Rango de Costos", f"${min(costos):,.0f} - ${max(costos):,.0f}")
+
+    with col2:
+        probabilidades = [opt.get('probabilidad_cumplimiento', 0) for opt in delivery_options]
+        st.metric("📊 Rango Probabilidades", f"{min(probabilidades):.0%} - {max(probabilidades):.0%}")
+
+    with col3:
+        st.metric("📦 Opción Recomendada", recommendation.get('opcion', 'N/A').replace('_', ' ').title())
+
 
 def _create_nearby_stores_from_response(stock_analysis: dict, destination_node_name: str):
     """Crear tiendas cercanas sin stock"""
@@ -1235,7 +1786,6 @@ def render_technical_details(data: dict):
             st.json(data)
 
 
-# AGREGAR ESTA FUNCIÓN AL FINAL DE components/charts.py
 
 def _create_logistics_route_from_response_with_distances(logistica: dict, cedis_analysis, stock_nodes: list,
                                                          destination_node_name: str):
