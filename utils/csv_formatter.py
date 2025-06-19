@@ -10,7 +10,7 @@ import streamlit as st
 import os
 
 from typing import Dict
-
+import plotly.express as px
 
 def load_csv_data(base_path: str) -> Dict[str, pd.DataFrame]:
     """
@@ -36,14 +36,13 @@ def load_csv_data(base_path: str) -> Dict[str, pd.DataFrame]:
             try:
                 df = pd.read_csv(file_path)
                 dataframes[df_name] = df
-                # st.success(f"CSV '{filename}' cargado como '{df_name}'.")
             except Exception as e:
                 st.error(f"No se pudo cargar el archivo '{filename}': {e}")
 
     return dataframes
 
 
-def select_dataframe(dataframe_dict: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+def select_dataframe(dataframe_dict: Dict[str, pd.DataFrame]):
     """
     Selecciona el dataframe a desplegar de una lista de dataframes y permite calcular métricas.
 
@@ -56,30 +55,27 @@ def select_dataframe(dataframe_dict: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         return pd.DataFrame()
 
     dataframes_names = dataframe_dict.keys()
-    selected_name = st.selectbox("Seleccionar una lista de datos", dataframes_names)
+    selected_name = st.selectbox("Seleccionar un conjunto de datos", dataframes_names)
 
     selected_df = dataframe_dict.get(selected_name)
 
     if selected_df is not None:
-        st.subheader(f"💾 Datos del DataFrame: {selected_name}")
-        st.dataframe(selected_df.head())  # Muestra el head del DataFrame original
 
-        # Creamos una nueva sección para el DataFrame filtrado y las métricas
-        st.markdown("---")
-        st.write("### Opciones de Visualización y Análisis")
+        return selected_df, selected_name
 
-        # Usamos pestañas para organizar la visualización y las métricas
-        tab_filtered_df, tab_insights = st.tabs(["DataFrame Filtrado", "Análisis Estadístico"])
+    # if selected_df is not None:
+    #
+    #     # Usamos pestañas para organizar la visualización y las métricas
+    #     current_df, tab_insights = st.tabs([f"Visualizar información", "Análisis Estadístico"])
+    #
+    #     with current_df:
+    #         st.subheader(f"🛒 DataFrame seleccionado: {selected_name}")
+    #
+    #     with tab_insights:
+    #         render_dataframe_insights(selected_df, selected_name)
+    #
+    #     return selected_df
 
-        with tab_filtered_df:
-            st.subheader(f"🛒 DataFrame Filtrado: {selected_name}")
-            filtered_df = filter_dataframe(selected_df)
-            st.dataframe(filtered_df)
-
-        with tab_insights:
-            render_dataframe_insights(filtered_df, selected_name)
-
-        return filtered_df
     else:
         st.warning("El DataFrame seleccionado no se encontró. Esto no debería ocurrir.")
         return pd.DataFrame()
@@ -96,18 +92,12 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Dataframe después de los filtros aplicados
     """
 
-    modify = st.checkbox("Añadir filtros")
-
-    if not modify:
-        return df
-
-    df = df.copy()
-
     # Transformar las columnas que contienen fechas en un formato standard (datetime)
     for col in df.columns:
         if is_object_dtype(df[col]):
             try:
-                df[col] = pd.to_datetime(df[col])
+                df[col] = pd.to_datetime(df[col], format="%Y-%m-%d")
+                df[col] = df[col].dt.date() # Conversión para que solo se considere la fecha (sin hora)
             except Exception:
                 pass
 
@@ -122,8 +112,8 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             left, right = st.columns((1, 20))
 
             # Variables catégoricas
-            if isinstance(df[column], pd.CategoricalDtype) or df[column].nunique() < 10:
-                # if isinstance(df[column], pd.CategoricalDtype): # TODO Verificar que las variables categoricas sean correctamente  parseadas
+            # if isinstance(df[column], pd.CategoricalDtype) or df[column].nunique() < 10:
+            if isinstance(df[column], pd.CategoricalDtype): # TODO Verificar que las variables categoricas sean correctamente  parseadas
                 user_cat_input = right.multiselect(
                     f"Valores para {column}",
                     df[column].unique(),
@@ -159,8 +149,9 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                 if len(user_date_input) == 2:
                     user_date_input = tuple(map(pd.to_datetime, user_date_input))
                     start_date, end_date = user_date_input
-                    df = df.loc[df[column].between(start_date, end_date)]
+                    df = df.loc[df[column].between(start_date.normalize(), end_date.normalize())]
             else:
+                # Búsqueda por texto
                 user_text_input = right.text_input(
                     f"Substring or regex in {column}",
                 )
@@ -170,7 +161,7 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def render_dataframe_insights(df: pd.DataFrame, df_name: str):
+def get_dataframe_insights(df: pd.DataFrame, df_name: str) -> pd.DataFrame:
     """
     Agrega una capa de información sobre el DataFrame para calcular y mostrar métricas.
 
@@ -178,7 +169,7 @@ def render_dataframe_insights(df: pd.DataFrame, df_name: str):
         df (pd.DataFrame): El DataFrame sobre el cual calcular las métricas
         df_name (str): El nombre del DataFrame para referencia en el UI.
     """
-    st.subheader(f"📈 Análisis de Métricas para {df_name}")
+    st.subheader(f"📈 Análisis de métricas para: {df_name}")
 
     if df.empty:
         st.info("El DataFrame está vacío. No se pueden calcular métricas.")
@@ -189,7 +180,7 @@ def render_dataframe_insights(df: pd.DataFrame, df_name: str):
     selected_columns = st.multiselect(
         "Selecciona las columnas para analizar",
         all_columns,
-        default=all_columns[:min(5, len(all_columns))]
+        default=all_columns[:min(1, len(all_columns))]
     )
 
     if not selected_columns:
@@ -198,7 +189,7 @@ def render_dataframe_insights(df: pd.DataFrame, df_name: str):
 
     # Definir métricas disponibles
     numeric_metrics_options = [
-        "Media (Promedio)", "Mediana", "Moda", "Mínimo", "Máximo", "Conteo (No Nulos)",
+        "Media (Promedio)", "Mediana", "Moda", "Mínimo", "Máximo", "Conteo (No Nulos)", "Número de Valores Únicos",
     ]
     categorical_metrics_options = [
         "Moda", "Conteo (No Nulos)", "Número de Valores Únicos",
@@ -212,36 +203,37 @@ def render_dataframe_insights(df: pd.DataFrame, df_name: str):
         selected_numeric_metrics = st.multiselect(
             "Métricas para columnas numéricas",
             numeric_metrics_options,
-            default=["Media (Promedio)", "Mediana", "Mínimo", "Máximo", "Conteo (No Nulos)"]
+            default=["Conteo (No Nulos)", "Número de Valores Únicos"]
         )
     with col2:
         selected_categorical_metrics = st.multiselect(
             "Métricas para columnas categóricas/texto",
             categorical_metrics_options,
-            default=["Moda", "Número de Valores Únicos", "Conteo (No Nulos)"]
+            default=["Conteo (No Nulos)", "Número de Valores Únicos"]
         )
 
     st.markdown("---")
     metrics_results = {}
 
     for col in selected_columns:
+
         metrics_results[col] = {}
         column_data = df[col]
         metrics_results[col]["Conteo (No Nulos)"] = column_data.count()
 
         if is_numeric_dtype(column_data):
 
-            # 1. Formatear MEDIA
+            # 1. Calcular de MEDIA
             if "Media (Promedio)" in selected_numeric_metrics:
                 mean_val = column_data.mean()
                 metrics_results[col]["Media (Promedio)"] = f"{mean_val:.2f}"
 
-            # 2. Formatear MEDIANA
+            # 2. Calcular MEDIANA
             if "Mediana" in selected_numeric_metrics:
                 median_val = column_data.median()
                 metrics_results[col]["Mediana"] = f"{median_val:.2f}"
 
-            # 3. Formatear MODA (manejando múltiples valores)
+            # 3. Calcular MODA
             if "Moda" in selected_numeric_metrics:
                 mode_val = column_data.mode()
                 if not mode_val.empty:
@@ -286,4 +278,4 @@ def render_dataframe_insights(df: pd.DataFrame, df_name: str):
     final_cols_order = general_cols + sorted(other_cols)
     metrics_df = metrics_df.reindex(columns=final_cols_order).T  # Transponer
 
-    st.dataframe(metrics_df.fillna('').astype(str), use_container_width=True)
+    return metrics_df

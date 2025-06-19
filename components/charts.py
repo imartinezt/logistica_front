@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 from streamlit_echarts import st_echarts
 
@@ -8,8 +9,8 @@ from utils.helpers import (
     extract_key_insights, render_comprehensive_evaluation_table
 )
 
-from utils.filter_data import select_dataframe, load_csv_data
-
+from utils.csv_formatter import select_dataframe, load_csv_data, filter_dataframe
+from utils.csv_formatter import get_dataframe_insights
 
 def calcular_llegada_relativa(fecha_compra_str: str, fecha_entrega_str: str) -> str:
     """Calcular cuándo llega el pedido de forma relativa a la fecha de compra"""
@@ -1353,10 +1354,51 @@ def _create_logistics_route_from_response_with_distances(logistica: dict, cedis_
 
 
 def render_csv_data(csv_directory: str):
+    """
+    Método que permite renderizar la información relacionada con los conjuntos de datos utilizados
+    en formato .csv
+    """
+
     st.header("🔎 Explorar Fuentes de Datos")
 
+    # Seleccionamos un dataset de una lista y desplegamos un análisis simple
     dataframes_disponibles = load_csv_data(csv_directory)
+    selected_df, selected_name =  select_dataframe(dataframes_disponibles)
 
-    selected_and_filtered_df = select_dataframe(dataframes_disponibles)
 
-    # st.dataframe(selected_and_filtered_df)
+    # Añadimos pestañas para trabajar con el filtrado, análisis de datos y gráficas
+    # current_df, insights_df, charts_df = st.tabs([f"Visualizar información", "Análisis Estadístico", "Graficas informativas"])
+    current_df, insights_df = st.tabs([f"Visualizar información", "Análisis Estadístico"])
+
+
+    with current_df:
+
+        # Agregamos la parte de filtrado de datos
+        modify = st.checkbox("Añadir filtros")
+
+        if modify:
+            # Mostrar información filtrada en dataframes
+            df_copy = selected_df.copy()
+            filtered_df = filter_dataframe(df_copy)
+
+            st.subheader(f"🛒 DataFrame seleccionado (filtrado): {selected_name}")
+            st.dataframe(filtered_df)
+
+        else:
+            # Mostrar información sin filtrar en dataframes
+            st.subheader(f"🛒 DataFrame seleccionado: {selected_name}")
+            st.dataframe(selected_df)
+
+    with insights_df:
+
+        # Análisis estadístico simple (calcular media, mediana, moda)
+        metrics_df = get_dataframe_insights(selected_df, selected_name)
+        st.dataframe(metrics_df.fillna('').astype(str), use_container_width=True)
+
+        # Añadimos el dataframe sobre el que se obtienen las métricas
+        st.subheader("👁️ Dataframe de referencia")
+        st.dataframe(selected_df)
+
+    # with charts_df:
+    #
+    #     render_dataframe_charts(selected_df, selected_name)
