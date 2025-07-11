@@ -1,6 +1,6 @@
 class Config:
     # API Configuration
-    API_BASE_URL = "https://dev-logistica-back-img-g7sc5y2jfa-uc.a.run.app"
+    API_BASE_URL = "http://0.0.0.0:8000"
     API_PREDICT_ENDPOINT = "/api/v1/fee/predict"
     API_TIMEOUT = 30
 
