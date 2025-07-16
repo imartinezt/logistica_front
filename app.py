@@ -11,7 +11,6 @@ from components.forms import render_prediction_form
 from components.charts import render_results_dashboard
 from utils.helpers import init_session_state
 
-from components.charts import render_csv_data
 from config.settings import Config
 
 

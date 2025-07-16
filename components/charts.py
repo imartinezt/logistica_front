@@ -53,15 +53,17 @@ def render_results_dashboard():
     render_main_metrics(data)
 
     # Fecha promesa destacada
+    st.markdown("---")
     render_delivery_promise(data)
 
     # Insights
     render_key_insights(data)
 
     # Visualizaciones
+    st.markdown("---")
     render_interactive_charts(data)
 
-    # NUEVA SECCIÓN
+    # Evaluación integral
     st.markdown("---")
     render_comprehensive_evaluation_table(data)
 
@@ -136,9 +138,6 @@ def render_delivery_promise(data: dict):
             <div style='text-align: center;'>
                 <h3 style='margin: 0; font-size: 1.2rem; opacity: 0.9;'>🎯 Fecha Promesa de Entrega</h3>
                 <h1 style='font-size: 2.8rem; margin: 1rem 0; font-weight: 800; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);'>{fecha_entrega}</h1>
-                <div style='font-size: 1.3rem; opacity: 0.9; background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin-top: 1rem;'>
-                    🕐 Ventana de entrega: <strong>{rango.get('inicio', 'N/A')} - {rango.get('fin', 'N/A')}</strong>
-                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -178,29 +177,16 @@ def render_key_insights(data: dict):
 
 def render_interactive_charts(data: dict):
     """Renderizar gráficos interactivos"""
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2 = st.tabs([
         "🗺️ Ruta de Entrega",
-        "📊 Métricas de Rendimiento",
-        "⏰ Timeline de Proceso",
-        "🎯 Análisis de Factores",
-        "📁 Fuentes de datos (.csv)"
+        "🎯 Análisis de Factores"
     ])
 
     with tab1:
         render_delivery_route_graph(data)
 
     with tab2:
-        render_performance_metrics_chart(data)
-
-    with tab3:
-        render_process_timeline(data)
-
-    with tab4:
         render_factors_analysis(data)
-
-    with tab5:
-        render_csv_data(Config.CSV_FOLDER)
-
 
 
 def render_delivery_route_graph(data: dict):
@@ -1046,107 +1032,6 @@ def _create_nearby_stores_from_response(stock_analysis: dict, destination_node_n
 
     return nodes, links
 
-
-def _create_logistics_route_from_response(logistica: dict, cedis_analysis, stock_nodes: list,
-                                          destination_node_name: str):
-    """Crear ruta logística basada en la respuesta del API"""
-    nodes = []
-    links = []
-
-    if not stock_nodes:
-        return nodes, links
-
-    try:
-        current_node = stock_nodes[0]['name']
-        tipo_ruta = logistica.get('tipo_ruta', '')
-        carrier = logistica.get('carrier', 'N/A')
-        flota = logistica.get('flota', 'N/A')
-
-        # CASO 1: RUTA VÍA CEDIS
-        if 'cedis' in tipo_ruta.lower() and cedis_analysis:
-            cedis_seleccionado = cedis_analysis.get('cedis_seleccionado', {})
-
-            if cedis_seleccionado:
-                cedis_nombre = cedis_seleccionado.get('nombre', 'CEDIS')
-
-                # Crear nodo CEDIS
-                cedis_node = {
-                    "name": f"🏭 {cedis_nombre}",
-                    "value": 80,
-                    "symbolSize": 85,
-                    "category": 4,
-                    "itemStyle": {
-                        "color": "#6366f1",
-                        "borderWidth": 4,
-                        "borderColor": "#ffffff"
-                    },
-                    "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
-                    "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {cedis_nombre}\\nScore: {cedis_seleccionado.get('score', 0):.2f}"
-                }
-                nodes.append(cedis_node)
-
-                # Enlace tienda → CEDIS
-                links.append({
-                    "source": current_node,
-                    "target": f"🏭 {cedis_nombre}",
-                    "lineStyle": {"color": "#6366f1", "width": 6},
-                    "label": {"show": True, "formatter": "📦 Envío a CEDIS"}
-                })
-
-                current_node = f"🏭 {cedis_nombre}"
-
-        # CASO 2: CREAR NODO DE FLOTA/CARRIER
-        flota_icon = "🚚" if 'FI' in flota else "🚛"
-        flota_color = "#3b82f6" if 'FI' in flota else "#8b5cf6"
-        flota_category = 5 if 'FI' in flota else 6
-
-        flota_node = {
-            "name": f"{flota_icon} {carrier}",
-            "value": 90,
-            "symbolSize": 80,
-            "category": flota_category,
-            "itemStyle": {
-                "color": flota_color,
-                "borderWidth": 4,
-                "borderColor": "#ffffff"
-            },
-            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
-            "tooltip": f"{flota_icon} FLOTA\\nCarrier: {carrier}\\nTipo: {flota}\\nTiempo: {logistica.get('tiempo_total_h', 0):.1f}h"
-        }
-        nodes.append(flota_node)
-
-        # Enlaces finales
-        links.append({
-            "source": current_node,
-            "target": f"{flota_icon} {carrier}",
-            "lineStyle": {"color": flota_color, "width": 7},
-            "label": {"show": True, "formatter": "🚚 Recogida"}
-        })
-
-        links.append({
-            "source": f"{flota_icon} {carrier}",
-            "target": destination_node_name,
-            "lineStyle": {
-                "color": "#1e40af",
-                "width": 10,
-                "shadowBlur": 15,
-                "shadowColor": "rgba(30, 64, 175, 0.4)"
-            },
-            "label": {
-                "show": True,
-                "formatter": "🎯 ENTREGA FINAL",
-                "fontSize": 13,
-                "fontWeight": "bold",
-                "color": "#1e40af"
-            }
-        })
-
-    except Exception as e:
-        st.error(f"Error creando ruta logística: {str(e)}")
-
-    return nodes, links
-
-
 def _create_external_factors_from_response(factores_externos: dict, destination_node_name: str):
     """Crear factores externos basados en la respuesta"""
     nodes = []
@@ -1794,161 +1679,52 @@ def render_technical_details(data: dict):
         if show_json:
             st.json(data)
 
-
-
-def _create_logistics_route_from_response_with_distances(logistica: dict, cedis_analysis, stock_nodes: list,
-                                                         destination_node_name: str):
-    """Crear ruta logística CON DISTANCIAS en los enlaces - para charts.py"""
-    nodes = []
-    links = []
-
-    if not stock_nodes:
-        return nodes, links
-
-    try:
-        current_node = stock_nodes[0]['name']
-        tipo_ruta = logistica.get('tipo_ruta', '')
-        carrier = logistica.get('carrier', 'N/A')
-        flota = logistica.get('flota', 'N/A')
-        distancia_total = logistica.get('distancia_km', 0)
-
-        # CASO 1: RUTA VÍA CEDIS
-        if 'cedis' in tipo_ruta.lower() and cedis_analysis and isinstance(cedis_analysis, dict):
-            cedis_seleccionado = cedis_analysis.get('cedis_seleccionado', {})
-
-            if cedis_seleccionado:
-                cedis_nombre = cedis_seleccionado.get('nombre', 'CEDIS')
-                dist_origen_cedis = cedis_seleccionado.get('distancia_origen_cedis_km', 0)
-                dist_cedis_destino = cedis_seleccionado.get('distancia_cedis_destino_km', 0)
-
-                # Crear nodo CEDIS
-                cedis_node = {
-                    "name": f"🏭 {cedis_nombre}",
-                    "value": 80,
-                    "symbolSize": 85,
-                    "category": 4,
-                    "itemStyle": {
-                        "color": "#6366f1",
-                        "borderWidth": 4,
-                        "borderColor": "#ffffff"
-                    },
-                    "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
-                    "tooltip": f"🏭 CENTRO DE DISTRIBUCIÓN\\nNombre: {cedis_nombre}\\nScore: {cedis_seleccionado.get('score', 0):.2f}"
-                }
-                nodes.append(cedis_node)
-
-                # Enlace tienda → CEDIS CON DISTANCIA
-                links.append({
-                    "source": current_node,
-                    "target": f"🏭 {cedis_nombre}",
-                    "lineStyle": {"color": "#6366f1", "width": 6},
-                    "label": {"show": True, "formatter": f"📦 {dist_origen_cedis:.0f}km", "fontSize": 11}
-                })
-
-                current_node = f"🏭 {cedis_nombre}"
-                distancia_restante = dist_cedis_destino
-        else:
-            # Ruta directa
-            distancia_restante = distancia_total
-
-        # CASO 2: CREAR NODO DE FLOTA/CARRIER
-        flota_icon = "🚚" if 'FI' in flota else "🚛"
-        flota_color = "#3b82f6" if 'FI' in flota else "#8b5cf6"
-        flota_category = 5 if 'FI' in flota else 6
-
-        flota_node = {
-            "name": f"{flota_icon} {carrier}",
-            "value": 90,
-            "symbolSize": 80,
-            "category": flota_category,
-            "itemStyle": {
-                "color": flota_color,
-                "borderWidth": 4,
-                "borderColor": "#ffffff"
-            },
-            "label": {"show": True, "fontSize": 12, "fontWeight": "bold"},
-            "tooltip": f"{flota_icon} FLOTA\\nCarrier: {carrier}\\nTipo: {flota}\\nTiempo: {logistica.get('tiempo_total_h', 0):.1f}h"
-        }
-        nodes.append(flota_node)
-
-        # Enlaces finales CON DISTANCIAS
-        links.append({
-            "source": current_node,
-            "target": f"{flota_icon} {carrier}",
-            "lineStyle": {"color": flota_color, "width": 7},
-            "label": {"show": True, "formatter": "🚚 Recogida", "fontSize": 10}
-        })
-
-        links.append({
-            "source": f"{flota_icon} {carrier}",
-            "target": destination_node_name,
-            "lineStyle": {
-                "color": "#1e40af",
-                "width": 10,
-                "shadowBlur": 15,
-                "shadowColor": "rgba(30, 64, 175, 0.4)"
-            },
-            "label": {
-                "show": True,
-                "formatter": f"🎯 {distancia_restante:.0f}km",
-                "fontSize": 13,
-                "fontWeight": "bold",
-                "color": "#1e40af"
-            }
-        })
-
-    except Exception as e:
-        st.error(f"Error creando ruta logística: {str(e)}")
-
-    return nodes, links
-
-
-def render_csv_data(csv_directory: str):
-    """
-    Método que permite renderizar la información relacionada con los conjuntos de datos utilizados
-    en formato .csv
-    """
-
-    st.header("🔎 Explorar Fuentes de Datos")
-
-    # Seleccionamos un dataset de una lista y desplegamos un análisis simple
-    dataframes_disponibles = load_csv_data(csv_directory)
-    selected_df, selected_name =  select_dataframe(dataframes_disponibles)
-
-
-    # Añadimos pestañas para trabajar con el filtrado, análisis de datos y gráficas
-    # current_df, insights_df, charts_df = st.tabs([f"Visualizar información", "Análisis Estadístico", "Graficas informativas"])
-    current_df, insights_df = st.tabs([f"Visualizar información", "Análisis Estadístico"])
-
-
-    with current_df:
-
-        # Agregamos la parte de filtrado de datos
-        modify = st.checkbox("Añadir filtros")
-
-        if modify:
-            # Mostrar información filtrada en dataframes
-            df_copy = selected_df.copy()
-            filtered_df = filter_dataframe(df_copy)
-
-            st.subheader(f"🛒 DataFrame seleccionado (filtrado): {selected_name}")
-            st.dataframe(filtered_df)
-
-        else:
-            # Mostrar información sin filtrar en dataframes
-            st.subheader(f"🛒 DataFrame seleccionado: {selected_name}")
-            st.dataframe(selected_df)
-
-    with insights_df:
-
-        # Análisis estadístico simple (calcular media, mediana, moda)
-        metrics_df = get_dataframe_insights(selected_df, selected_name)
-        st.dataframe(metrics_df.fillna('').astype(str), use_container_width=True)
-
-        # Añadimos el dataframe sobre el que se obtienen las métricas
-        st.subheader("👁️ Dataframe de referencia")
-        st.dataframe(selected_df)
-
-    # with charts_df:
-    #
-    #     render_dataframe_charts(selected_df, selected_name)
+# def render_csv_data(csv_directory: str):
+#     """
+#     Método que permite renderizar la información relacionada con los conjuntos de datos utilizados
+#     en formato .csv
+#     """
+#
+#     st.header("🔎 Explorar Fuentes de Datos")
+#
+#     # Seleccionamos un dataset de una lista y desplegamos un análisis simple
+#     dataframes_disponibles = load_csv_data(csv_directory)
+#     selected_df, selected_name =  select_dataframe(dataframes_disponibles)
+#
+#
+#     # Añadimos pestañas para trabajar con el filtrado, análisis de datos y gráficas
+#     # current_df, insights_df, charts_df = st.tabs([f"Visualizar información", "Análisis Estadístico", "Graficas informativas"])
+#     current_df, insights_df = st.tabs([f"Visualizar información", "Análisis Estadístico"])
+#
+#
+#     with current_df:
+#
+#         # Agregamos la parte de filtrado de datos
+#         modify = st.checkbox("Añadir filtros")
+#
+#         if modify:
+#             # Mostrar información filtrada en dataframes
+#             df_copy = selected_df.copy()
+#             filtered_df = filter_dataframe(df_copy)
+#
+#             st.subheader(f"🛒 DataFrame seleccionado (filtrado): {selected_name}")
+#             st.dataframe(filtered_df)
+#
+#         else:
+#             # Mostrar información sin filtrar en dataframes
+#             st.subheader(f"🛒 DataFrame seleccionado: {selected_name}")
+#             st.dataframe(selected_df)
+#
+#     with insights_df:
+#
+#         # Análisis estadístico simple (calcular media, mediana, moda)
+#         metrics_df = get_dataframe_insights(selected_df, selected_name)
+#         st.dataframe(metrics_df.fillna('').astype(str), use_container_width=True)
+#
+#         # Añadimos el dataframe sobre el que se obtienen las métricas
+#         st.subheader("👁️ Dataframe de referencia")
+#         st.dataframe(selected_df)
+#
+#     # with charts_df:
+#     #
+#     #     render_dataframe_charts(selected_df, selected_name)
