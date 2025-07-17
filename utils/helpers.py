@@ -1,5 +1,5 @@
 from datetime import datetime
-
+import pandas as pd
 import streamlit as st
 
 
@@ -38,36 +38,41 @@ def format_datetime_with_time(datetime_str: str) -> str:
     except:
         return "N/A"
 
-def get_delivery_status_badge(tipo_entrega: str) -> str:
-    """Obtener badge de tipo de entrega"""
-    badges = {
-        "EXPRESS": {
-            "color": "#10b981",
-            "icon": "⚡",
-            "label": "EXPRESS"
-        },
-        "STANDARD": {
-            "color": "#3b82f6",
-            "icon": "📦",
-            "label": "STANDARD"
-        },
-        "PREMIUM": {
-            "color": "#8b5cf6",
-            "icon": "👑",
-            "label": "PREMIUM"
-        }
+## Modificación
+def get_delivery_status_badge(delivery_type: str) -> str:
+    """
+    Obtener badge de tipo de entrega
+    """
+    delivery_type_upper = delivery_type.upper()
+    badge_info = {
+        "color": "#64748b", # Default gray
+        "icon": "📋",
+        "label": delivery_type
     }
 
-    badge_info = badges.get(tipo_entrega, {
-        "color": "#64748b",
-        "icon": "📋",
-        "label": tipo_entrega
-    })
+    if "FLOTA LIVERPOOL" in delivery_type_upper:
+        badge_info = {
+            "color": "#FFC0CB",
+            "icon": "🏠",
+            "label": "FLOTA LIVERPOOL"
+        }
+    elif "MENSAJERIA EXTERNA" in delivery_type_upper:
+        badge_info = {
+            "color": "#ADD8E6",
+            "icon": "🚚",
+            "label": "MENSAJERIA EXTERNA"
+        }
+    elif "EDT" in delivery_type_upper or "PROGRAMADA" in delivery_type_upper:
+        badge_info = {
+            "color": "#90EE90",
+            "icon": "🗓️",
+            "label": delivery_type
+        }
 
     return f'''
     <span style="
         background: {badge_info["color"]};
-        color: white;
+        color: black; /* Changed to black for better contrast on light backgrounds */
         padding: 0.375rem 0.875rem;
         border-radius: 9999px;
         font-size: 0.875rem;
@@ -750,7 +755,8 @@ def extract_key_insights(data: dict) -> list:
 
     return insights[:5]  # Máximo 5 insights
 
-### Análisis completo de Tiendas Liverpool
+## Análisis completo de Tiendas Liverpool
+
 def render_liverpool_analysis_corrected(data: dict):
     """Análisis Liverpool CORREGIDO con lógica correcta de tiendas"""
     st.markdown("### 🏪 Análisis Completo de Tiendas Liverpool")
@@ -967,3 +973,190 @@ def render_liverpool_analysis_enhanced(data: dict):
 
     # Resto del análisis actual...
     render_liverpool_analysis_corrected(data)
+
+
+def render_prediction_results(data: dict):
+    """
+    Renderizar los resultados completos de la predicción de entrega,
+    adaptándose si hay un split en la entrega.
+    """
+    st.subheader("📊 Resultados de la Predicción de Entrega")
+
+    # Sección principal de métricas
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown("**🛣️ Información de ruta**")
+        st.metric("📦 ID Trazo", data.get('id_trazo', 'N/A'))
+        st.metric("📍 Tienda", data.get('tienda', 'N/A'))
+        st.metric("🚚 Método", data.get('metodo', 'N/A'))
+    with col2:
+        st.markdown("**🗓️Fechas importantes**")
+        st.metric("⏳ Días Estimados", data.get('dias', 'N/A'))
+        st.metric("🗓️ Fecha Entrega", format_datetime(data.get('fecha_entrega', '')))
+    with col3:
+        st.markdown("**💲Desglose de costos**")
+        st.metric("🛒 Cantidad Total", data.get('cantidad_total', 'N/A'))
+        st.metric("💰 Costo Unitario", format_currency(data.get('costo_unitario', 0)))
+        st.metric("💲 Costo Total", format_currency(data.get('costo', 0)))
+    with col4:
+        st.markdown("**⚙️ Detalles técnicos**")
+        st.metric("⏱️ Tiempo de procesamiento", f"{data.get('tiempo_proceso_ms', 0):.2f} ms")
+        st.metric("✨ Score", format_percentage(data.get('score', 0)))
+
+    st.markdown("---")
+    st.subheader("🔍 Información Detallada de la Entrega")
+
+    # Tipo de Entrega
+    tipo_entrega = data.get('tipo_entrega', {})
+    if tipo_entrega:
+        st.markdown(f"**Tipo de Entrega:** {tipo_entrega.get('icono', '')} {tipo_entrega.get('nombre', 'N/A')}")
+        st.info(f"Descripción: {tipo_entrega.get('descripcion', 'N/A')}")
+        st.info(f"Criterios: {tipo_entrega.get('criterios', 'N/A')}")
+        st.info(f"Ventana de Tiempo: {tipo_entrega.get('ventana_tiempo', 'N/A')}")
+    else:
+        st.info("ℹ️ No se encontró información detallada del tipo de entrega.")
+
+    st.markdown("---")
+    st.subheader("🗺️ Contexto Geográfico")
+    geo_context = data.get('contexto_geografico', {})
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("🌍 Rango CP", geo_context.get('rango_cp', 'N/A'))
+        st.metric("🏘️ Estado/Alcaldía", geo_context.get('estado_alcaldia', 'N/A'))
+        st.metric("🏬 Cobertura Liverpool", "✅ Sí" if geo_context.get('cobertura_liverpool', False) else "❌ No")
+    with col2:
+        st.metric("🚨 Zona Seguridad", geo_context.get('zona_seguridad', 'N/A'))
+        st.metric("🏙️ Tipo de Zona", geo_context.get('tipo_zona', 'N/A'))
+    with col3:
+        st.metric("⏳ Tiempo Entrega Base (horas)", geo_context.get('tiempo_entrega_base_horas', 'N/A'))
+        st.metric("📝 Observaciones", geo_context.get('observaciones', 'N/A'))
+
+    st.markdown("---")
+    st.subheader("☁️ Contexto Climático")
+    clim_context = data.get('contexto_climatico', {})
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("📍 Región", clim_context.get('region_nombre', 'N/A'))
+        st.metric("🗺️ Estado Principal", clim_context.get('estado_principal', 'N/A'))
+    with col2:
+        st.metric("☀️ Clima Actual", clim_context.get('clima_actual', 'N/A'))
+        st.metric("🌡️ Temperatura (Min/Max)",
+                  f"{clim_context.get('temperatura_min', 'N/A')}°C / {clim_context.get('temperatura_max', 'N/A')}°C")
+    with col3:
+        st.metric("⛰️ Altitud (msnm)", clim_context.get('altitud_msnm', 'N/A'))
+        st.metric("💧 Precipitación Anual", f"{clim_context.get('precipitacion_anual', 'N/A')} mm")
+        st.metric("⚡ Factores Especiales", clim_context.get('factores_especiales', 'N/A'))
+
+    st.markdown("---")
+    st.subheader("⚙️ Ajustes Aplicados")
+    ajustes = data.get('ajustes_aplicados', {})
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("➕ Tiempo Extra (horas)", ajustes.get('tiempo_extra_horas', 'N/A'))
+    with col2:
+        st.metric("✖️ Multiplicador Costo", ajustes.get('multiplicador_costo', 'N/A'))
+    with col3:
+        st.metric("🚀 Entrega Rápida Viable", "✅ Sí" if ajustes.get('entrega_rapida_viable', False) else "❌ No")
+
+    st.markdown("---")
+    st.subheader("⚖️ Pesos Aplicados y Decisión")
+    decision_info = data.get('decision_info', {})
+    pesos_aplicados = data.get('pesos_aplicados', {})
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Criterios de Decisión:**")
+        st.info(f"Criterio Principal: {decision_info.get('criterio_principal', 'N/A')}")
+        st.info(f"Temporada Aplicada: {decision_info.get('temporada_aplicada', 'N/A')}")
+        st.info(f"Pesos Origen: {decision_info.get('pesos_origen', 'N/A')}")
+        if 'razon_split' in decision_info and decision_info['razon_split']:
+            st.info(f"Motivo del Split: {decision_info['razon_split']} 💡")
+    with col2:
+        st.write("**Pesos Utilizados:**")
+        if pesos_aplicados:
+            for key, value in pesos_aplicados.items():
+                st.info(f"{key.replace('_', ' ').title()}: {format_percentage(value)}")
+        else:
+            st.info("ℹ️ No se encontraron pesos aplicados.")
+
+def render_candidates(data):
+    """
+    Despliega las rutas candidatas que fueron evaluadas,
+    coloreando las filas seleccionadas.
+    """
+    st.subheader("🏆 Principales candidatos")
+    alternatives = data.get('alternativas', [])
+    if alternatives:
+        df_alternatives = pd.DataFrame(alternatives)
+
+        styled_df = df_alternatives.style.apply(highlight_selected_row, axis=1)
+
+        if 'costo' in df_alternatives.columns:
+            df_alternatives['costo'] = df_alternatives['costo'].apply(format_currency)
+        if 'score' in df_alternatives.columns:
+            df_alternatives['score'] = df_alternatives['score'].apply(format_percentage)
+
+        column_configuration = {
+            "selected": st.column_config.CheckboxColumn(
+                "✅ Seleccionada",
+                help="Indica si esta ruta fue seleccionada para la entrega",
+                default=False,
+                width="small"
+            )
+        }
+
+        st.dataframe(styled_df, use_container_width=True, column_config=column_configuration)
+    else:
+        st.info("No se encontraron alternativas. 🤷‍♀️")
+
+    st.markdown("---")
+    st.subheader("ℹ️ Información Adicional")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("📊 Total de opciones evaluadas", data.get('opciones_evaluadas', 'N/A'))
+    with col2:
+        es_split = data.get('es_split', False)
+        st.metric("📦 ¿Es Split?", "✅ Sí" if es_split else "❌ No")
+
+    if es_split:
+        st.subheader("📦 Detalles de las Rutas del Split")
+        split_info = data.get('split_info', {})
+        if split_info:
+            st.write(f"Número de rutas seleccionadas: **{split_info.get('rutas_seleccionadas', 'N/A')}**")
+            st.write(f"Tiempo total (días): **{split_info.get('tiempo_total', 'N/A')}**")
+            st.write(f"Costo total: **{format_currency(split_info.get('costo_total', 0))}**")
+            st.write(f"Costo unitario promedio: **{format_currency(split_info.get('costo_unitario_promedio', 0))}**")
+            st.write(f"Cantidad total: **{split_info.get('cantidad_total', 'N/A')}**")
+
+            detalle_rutas = split_info.get('detalle_rutas', [])
+            if detalle_rutas:
+                st.markdown("---")
+                st.write("**Desglose por Ruta:**")
+                for i, ruta in enumerate(detalle_rutas):
+                    st.markdown(f"**Ruta {i + 1}:**")
+                    col_r1, col_r2, col_r3 = st.columns(3)
+                    with col_r1:
+                        st.metric("🆔 ID Trazo", ruta.get('id_trazo', 'N/A'))
+                        st.metric("🏪 Tienda", ruta.get('tienda', 'N/A'))
+                        st.metric("🔢 Cantidad", ruta.get('cantidad', 'N/A'))
+                    with col_r2:
+                        st.metric("➡️ Método", ruta.get('metodo', 'N/A'))
+                        st.metric("📅 Días", ruta.get('dias', 'N/A'))
+                        st.metric("💲 Costo Unitario", format_currency(ruta.get('costo_unitario', 0)))
+                    with col_r3:
+                        st.metric("💸 Costo Total Ruta", format_currency(ruta.get('costo_total_ruta', 0)))
+                        st.metric("📦 Inventario Disponible", ruta.get('inventario_disponible', 'N/A'))
+                        st.metric("✨ Score", format_percentage(ruta.get('score', 0)))
+                    st.markdown("---")
+            else:
+                st.info("⚠️ No se encontraron detalles de rutas para el split.")
+        else:
+            st.info("ℹ️ No se encontró información detallada del split.")
+
+def highlight_selected_row(row):
+    """
+    Define el estilo para resaltar las filas donde 'selected' es True.
+    """
+    if row['selected']:
+        return ['background-color: #d4edda'] * len(row)
+    return [''] * len(row)

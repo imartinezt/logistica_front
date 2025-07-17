@@ -61,7 +61,7 @@ def render_prediction_form():
                 "Código Postal",
                 value="",
                 help="Código postal de 5 dígitos del destino",
-                placeholder="76000",
+                placeholder="52715",
                 label_visibility="collapsed",
                 key="cp_input"
             )
@@ -69,9 +69,9 @@ def render_prediction_form():
             render_section_header("📦", "Producto", "Información del SKU")
             sku_id = st.text_input(
                 "SKU",
-                value="",
+                value="1168252826",
                 help="Identificador único del producto",
-                placeholder="LIV-001",
+                placeholder="1168252826",
                 label_visibility="collapsed",
                 key="sku_input"
             )

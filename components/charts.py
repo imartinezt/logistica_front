@@ -1,12 +1,10 @@
-import pandas as pd
 import streamlit as st
 from streamlit_echarts import st_echarts
 
 from components.layout import render_header, render_back_button
-from config.settings import Config
 from utils.helpers import (
     format_currency, format_percentage, format_datetime, get_delivery_status_badge,
-    extract_key_insights, render_comprehensive_evaluation_table
+    extract_key_insights, render_comprehensive_evaluation_table, render_prediction_results, render_candidates
 )
 
 from utils.csv_formatter import select_dataframe, load_csv_data, filter_dataframe
@@ -49,26 +47,36 @@ def render_results_dashboard():
         "Resultados del análisis de ruta y predicción de entrega"
     )
 
-    # Métricas principales
-    render_main_metrics(data)
-
     # Fecha promesa destacada
-    st.markdown("---")
     render_delivery_promise(data)
 
-    # Insights
-    render_key_insights(data)
-
     # Visualizaciones
-    st.markdown("---")
     render_interactive_charts(data)
 
+
+    opt_tab1, opt_tab2 = st.tabs([f"Información general", "Detalles específicos"])
+
+    # Métricas principales
+    # render_main_metrics(data)
+
+
+    # Insights
+    # render_key_insights(data)
+
     # Evaluación integral
-    st.markdown("---")
-    render_comprehensive_evaluation_table(data)
+    # st.markdown("---")
+    # render_comprehensive_evaluation_table(data)
+
+    with opt_tab1:
+        # Data sobre las opciones de rutas y la opción seleccionada
+        render_candidates(data)
+
+    with opt_tab2:
+        # Resultados finales de la predicción
+        render_prediction_results(data)
 
     # Detalles técnicos
-    render_technical_details(data)
+    # render_technical_details(data)
 
 
 def render_main_metrics(data: dict):
@@ -108,17 +116,15 @@ def render_main_metrics(data: dict):
 
     with col4:
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        tipo_entrega = data.get('resultado_final', {}).get('tipo_entrega', 'N/A')
-        carrier = data.get('logistica_entrega', {}).get('carrier', 'N/A')
+        tipo_entrega = data.get('metodo', 'N/A')
         st.markdown("**🚚 Tipo de Entrega**")
         st.markdown(get_delivery_status_badge(tipo_entrega), unsafe_allow_html=True)
-        st.markdown(f"**Carrier:** {carrier}")
         st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_delivery_promise(data: dict):
     """Renderizar fecha promesa de entrega adaptada al nuevo response"""
-    fecha_entrega_str = data.get('resultado_final', {}).get('fecha_entrega_estimada', '')
+    fecha_entrega_str = data.get('fecha_entrega', '')
 
     if fecha_entrega_str:
         # fecha (sin hora)
@@ -177,16 +183,9 @@ def render_key_insights(data: dict):
 
 def render_interactive_charts(data: dict):
     """Renderizar gráficos interactivos"""
-    tab1, tab2 = st.tabs([
-        "🗺️ Ruta de Entrega",
-        "🎯 Análisis de Factores"
-    ])
-
-    with tab1:
-        render_delivery_route_graph(data)
-
-    with tab2:
-        render_factors_analysis(data)
+    st.subheader("⚡ Desglose de fechas importantes")
+    # render_delivery_route_graph(data)
+    render_delivery_summary(data)
 
 
 def render_delivery_route_graph(data: dict):
@@ -256,7 +255,7 @@ def render_delivery_route_graph(data: dict):
 
         option = _build_graph_config(nodes, links, categories, codigo_postal)
         st_echarts(option, height="900px", key="logistics_network_centered")
-        _render_summary_metrics(data, stock_analysis, logistica, codigo_postal)
+        # _render_summary_metrics(data, stock_analysis, logistica, codigo_postal)
 
     except Exception as e:
         st.error(f"Error generando gráfico de red: {str(e)}")
@@ -1306,11 +1305,15 @@ def render_simple_fallback_graph(data: dict):
 
 def render_delivery_summary(data: dict):
     """Renderizar resumen adaptado al nuevo response"""
-    request_data = data.get('request', {})
-    fecha_compra_str = request_data.get('fecha_compra', '')
-    fecha_entrega_str = data.get('resultado_final', {}).get('fecha_entrega_estimada', '')
-    rango_horario = data.get('resultado_final', {}).get('ventana_entrega', {})
+    # request_data = data.get('request', {})
+    # fecha_compra_str = request_data.get('fecha_compra', '')
+    fecha_compra_str = str(st.session_state.fecha_compra)
+    fecha_entrega_str = data.get('fecha_entrega', '')
+    rango_horario = data.get('tipo_entrega', {}).get('ventana_tiempo', {})
     dias_entrega = calcular_llegada_relativa(fecha_compra_str, fecha_entrega_str)
+
+    ## Obtenemos el método de entrega
+
 
     st.markdown(f"""
     <div style='
@@ -1336,7 +1339,7 @@ def render_delivery_summary(data: dict):
             </div>
             <div>
                 <h4 style='color: #6B5B73; margin: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;'>🕐 Horario</h4>
-                <p style='color: #4A4A4A; font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0;'>{rango_horario.get("inicio", "N/A")} - {rango_horario.get("fin", "N/A")}</p>
+                <p style='color: #4A4A4A; font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0;'>{rango_horario}</p>
             </div>
         </div>
     </div>
@@ -1679,52 +1682,52 @@ def render_technical_details(data: dict):
         if show_json:
             st.json(data)
 
-# def render_csv_data(csv_directory: str):
-#     """
-#     Método que permite renderizar la información relacionada con los conjuntos de datos utilizados
-#     en formato .csv
-#     """
-#
-#     st.header("🔎 Explorar Fuentes de Datos")
-#
-#     # Seleccionamos un dataset de una lista y desplegamos un análisis simple
-#     dataframes_disponibles = load_csv_data(csv_directory)
-#     selected_df, selected_name =  select_dataframe(dataframes_disponibles)
-#
-#
-#     # Añadimos pestañas para trabajar con el filtrado, análisis de datos y gráficas
-#     # current_df, insights_df, charts_df = st.tabs([f"Visualizar información", "Análisis Estadístico", "Graficas informativas"])
-#     current_df, insights_df = st.tabs([f"Visualizar información", "Análisis Estadístico"])
-#
-#
-#     with current_df:
-#
-#         # Agregamos la parte de filtrado de datos
-#         modify = st.checkbox("Añadir filtros")
-#
-#         if modify:
-#             # Mostrar información filtrada en dataframes
-#             df_copy = selected_df.copy()
-#             filtered_df = filter_dataframe(df_copy)
-#
-#             st.subheader(f"🛒 DataFrame seleccionado (filtrado): {selected_name}")
-#             st.dataframe(filtered_df)
-#
-#         else:
-#             # Mostrar información sin filtrar en dataframes
-#             st.subheader(f"🛒 DataFrame seleccionado: {selected_name}")
-#             st.dataframe(selected_df)
-#
-#     with insights_df:
-#
-#         # Análisis estadístico simple (calcular media, mediana, moda)
-#         metrics_df = get_dataframe_insights(selected_df, selected_name)
-#         st.dataframe(metrics_df.fillna('').astype(str), use_container_width=True)
-#
-#         # Añadimos el dataframe sobre el que se obtienen las métricas
-#         st.subheader("👁️ Dataframe de referencia")
-#         st.dataframe(selected_df)
-#
-#     # with charts_df:
-#     #
-#     #     render_dataframe_charts(selected_df, selected_name)
+def render_csv_data(csv_directory: str):
+    """
+    Método que permite renderizar la información relacionada con los conjuntos de datos utilizados
+    en formato .csv
+    """
+
+    st.header("🔎 Explorar Fuentes de Datos")
+
+    # Seleccionamos un dataset de una lista y desplegamos un análisis simple
+    dataframes_disponibles = load_csv_data(csv_directory)
+    selected_df, selected_name =  select_dataframe(dataframes_disponibles)
+
+
+    # Añadimos pestañas para trabajar con el filtrado, análisis de datos y gráficas
+    # current_df, insights_df, charts_df = st.tabs([f"Visualizar información", "Análisis Estadístico", "Graficas informativas"])
+    current_df, insights_df = st.tabs([f"Visualizar información", "Análisis Estadístico"])
+
+
+    with current_df:
+
+        # Agregamos la parte de filtrado de datos
+        modify = st.checkbox("Añadir filtros")
+
+        if modify:
+            # Mostrar información filtrada en dataframes
+            df_copy = selected_df.copy()
+            filtered_df = filter_dataframe(df_copy)
+
+            st.subheader(f"🛒 DataFrame seleccionado (filtrado): {selected_name}")
+            st.dataframe(filtered_df)
+
+        else:
+            # Mostrar información sin filtrar en dataframes
+            st.subheader(f"🛒 DataFrame seleccionado: {selected_name}")
+            st.dataframe(selected_df)
+
+    with insights_df:
+
+        # Análisis estadístico simple (calcular media, mediana, moda)
+        metrics_df = get_dataframe_insights(selected_df, selected_name)
+        st.dataframe(metrics_df.fillna('').astype(str), use_container_width=True)
+
+        # Añadimos el dataframe sobre el que se obtienen las métricas
+        st.subheader("👁️ Dataframe de referencia")
+        st.dataframe(selected_df)
+
+    # with charts_df:
+    #
+    #     render_dataframe_charts(selected_df, selected_name)
