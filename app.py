@@ -1,24 +1,21 @@
-import streamlit as st
 import sys
 from pathlib import Path
+import streamlit as st
 
 current_dir = Path(__file__).parent
 sys.path.append(str(current_dir))
 
 from components.layout import setup_page_config, load_custom_css
 from components.forms import render_prediction_form
-
 from components.charts import render_results_dashboard
 from utils.helpers import init_session_state
 
-from config.settings import Config
-
 
 def main():
+    """Función principal de la aplicación"""
     setup_page_config()
     load_custom_css()
     init_session_state()
-
     if st.session_state.show_results and st.session_state.prediction_data:
         render_results_dashboard()
     else:
