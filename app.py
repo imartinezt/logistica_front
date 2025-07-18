@@ -18,6 +18,11 @@ def main():
     init_session_state()
     if st.session_state.show_results and st.session_state.prediction_data:
         render_results_dashboard()
+
+    elif st.session_state.show_results_recalculate and st.session_state.prediction_data_recalculate:
+
+        return
+
     else:
         render_prediction_form()
 
