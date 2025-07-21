@@ -1,6 +1,6 @@
 import streamlit as st
 from config.settings import Config
-
+from pathlib import Path
 
 def setup_page_config():
     """Configurar la página de Streamlit"""
@@ -83,7 +83,6 @@ def load_custom_css():
         }
     </style>
     """, unsafe_allow_html=True)
-
 
 def render_header(title: str, subtitle: str = None):
     """Renderizar header de página"""
