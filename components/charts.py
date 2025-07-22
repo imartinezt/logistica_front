@@ -68,11 +68,12 @@ def render_main_results(data: dict, original_request: dict, recalculate: bool = 
     # Desglose de detalles de entrega
     render_delivery_details(data)
 
+    # Detalles técnicos
+    render_technical_details(data)
+
     # Calendario para visualización de fechas importantes
     render_delivery_calendar_view(data, original_request, recalculate)
 
-    # Detalles técnicos
-    render_technical_details(data)
 
     # Enriquecimiento del código postal destino
     # render_context_info(data)
