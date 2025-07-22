@@ -1,7 +1,7 @@
 class Config:
 
     # API endpoints
-    API_BASE_URL = "http://0.0.0.0:8000"
+    API_BASE_URL = "https://dev-fee-back-img-209565165407.us-central1.run.app"
     API_PREDICT_ENDPOINT = "/api/v1/fee/predict"
     API_RECALCULATE_ENDPOINT = "/api/v1/fee/recalculate"
 
@@ -27,5 +27,5 @@ class Config:
     # ------------------------------------------------------------------
     PROJECT_ID: str = "liv-dev-dig-chatbot"
     DATASET_ID: str = "Fecha_Estimada_Entrega"
-    TABLE_ID: str = "TB_FEE_RESULTADO_FINAL__JUL14_OPTIMIZED"
+    TABLE_ID: str = "TB_FEE_RESULTADO_CON_TIEMPO3_UUID"
     TABLE_ID_ORIGINAL: str = "TB_FEE_RESULTADO_FINAL__JUL14_OPTIMIZED"

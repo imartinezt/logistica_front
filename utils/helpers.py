@@ -1,6 +1,7 @@
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+from jinja2 import Template
 
 
 def init_session_state():
@@ -160,14 +161,14 @@ def highlight_selected_row(row):
         return ['background-color: #d4edda'] * len(row)
     return [''] * len(row)
 
-
-def generate_comparison_table(df_bigquery, api_data):
+def generate_comparison_table(df_bigquery, api_data: dict, original_request: dict, recalculate: bool = False):
     """Generates and styles the comparison DataFrame for display."""
     st.subheader("🎨Tabla Comparativa de Rutas")
 
     if api_data and not df_bigquery.empty:
         ganadores = []  # selected: true
         alternativas = []  # selected: false
+        excluded_stores = []
 
         for alt in api_data.get('alternativas', []):
             if alt.get('selected', False):
@@ -175,8 +176,13 @@ def generate_comparison_table(df_bigquery, api_data):
             else:
                 alternativas.append(alt.get('id', ''))
 
-        st.info(f"🏆 Rutas ganadoras: {ganadores}")
-        st.info(f"🥈 Alternativas encontradas: {alternativas}")
+        # Formateo para frontend
+
+        ganadores_display = ", ".join(ganadores)
+        alternativas_display = ", ".join(alternativas)
+
+        st.write(f"🏆 Rutas ganadoras: {ganadores_display}")
+        st.write(f"🥈 Alternativas encontradas: {alternativas_display}")
 
         def clasificar_ruta(row):
             id_trazo = str(row['ID_TRAZO'])
@@ -189,6 +195,32 @@ def generate_comparison_table(df_bigquery, api_data):
 
         df_bigquery['CLASIFICACION_ML'] = df_bigquery.apply(clasificar_ruta, axis=1)
 
+        # Modificación, para caso split
+        # excluded_stores = api_data.get('tiendas_rechazadas', None)
+        # excluded_stores = ['']
+
+        # --- Identify excluded store ---
+        excluded_store_cve = api_data.get('tienda_rechazada', None)
+
+        # if excluded_stores:
+        #     st.warning(f"🚨 **Se detectarón tiendas excluidas:** Se resaltarán en rojo las rutas de las siguientes tiendas **{excluded_stores}**.")
+        #
+        #     for store in excluded_stores:
+        #
+        #         if store and 'TDA_CVE' in df_bigquery.columns:
+        #             df_bigquery['ES_EXCLUIDA'] = df_bigquery['TDA_CVE'] == store
+        #         else:
+        #             df_bigquery['ES_EXCLUIDA'] = False
+        if excluded_store_cve:
+            st.warning(f"🚨 **Tienda Excluida detectada:** Se resaltarán en rojo las rutas de la tienda **{excluded_store_cve}**.")
+
+        # Add a column to mark excluded rows for styling
+
+        if excluded_store_cve and 'TDA_CVE' in df_bigquery.columns:
+            df_bigquery['ES_EXCLUIDA'] = df_bigquery['TDA_CVE'] == excluded_store_cve
+        else:
+            df_bigquery['ES_EXCLUIDA'] = False
+
         conteos = df_bigquery['CLASIFICACION_ML'].value_counts()
         st.write("📊 **Distribución de las rutas:**")
         for tipo, cantidad in conteos.items():
@@ -198,24 +230,25 @@ def generate_comparison_table(df_bigquery, api_data):
         columnas_display = ['ID_TRAZO', 'SKU_CVE', 'CP', 'TDA_CVE', 'INVENTARIO_OH', 'MET_ENTREGA', 'REAL_CAP_STORE', 'CAPACIDAD_ME', 'TIEMPO_3', 'COSTO', 'ZONA_ROJA', 'TRAFICO', 'DESASTRE_NATURAL', 'EXCL_PROD', 'TUBERIA', 'CLASIFICACION_ML']
         columnas_disponibles = [col for col in columnas_display if col in df_bigquery.columns]
 
-        df_display = df_bigquery[columnas_disponibles].copy()
+        df_display = df_bigquery[columnas_disponibles + ['ES_EXCLUIDA']].copy()
         rename_map = {
-            'ID_TRAZO': 'ID_Trazo',
+            'ID_TRAZO': 'Trazo',
             'SKU_CVE': 'SKU_CVE',
             'CP': 'CP',
             'TDA_CVE': 'Tienda',
             'INVENTARIO_OH': 'Inventario',
-            'MET_ENTREGA': 'Método_Entrega',
+            'MET_ENTREGA': 'Met_Entrega',
             'REAL_CAP_STORE': 'Cap_TDA',
             'CAPACIDAD_ME': 'Cap_ME',
             'TIEMPO_3': 'Tiempo',
             'COSTO': 'Costo',
-            'ZONA_ROJA': 'Zona_Roja',
+            'ZONA_ROJA': 'Zona',
             'TRAFICO': 'Trafico',
             'DESASTRE_NATURAL': 'Desastre',
-            'EXCL_PROD': 'Exclusivo',
+            'EXCL_PROD': 'EXCL_PROD',
             'TUBERIA': 'Tuberia',
-            'CLASIFICACION_ML': 'Tipo_ML'
+            'CLASIFICACION_ML': 'Decisión',
+            'ES_EXCLUIDA': 'Es_Excluida'
         }
 
         for old, new in rename_map.items():
@@ -223,57 +256,78 @@ def generate_comparison_table(df_bigquery, api_data):
                 df_display = df_display.rename(columns={old: new})
 
         orden_clasificacion = {'GANADOR': 1, 'ALTERNATIVA': 2, 'OTROS': 3}
-        df_display['_orden'] = df_display['Tipo_ML'].map(orden_clasificacion)
+        df_display['_orden'] = df_display['Decisión'].map(orden_clasificacion)
         df_display = df_display.sort_values(['_orden', 'Tiempo', 'Costo']).drop('_orden', axis=1)
 
-        # st.dataframe(df_display)
 
-        def build_html_table(df):
+        df_display_for_html = df_display.drop('Es_Excluida', axis=1, errors='ignore')
+
+
+        def build_html_table(df_to_render, original_df_with_flags):
             html = """
             <style>
                 table {
                     border-collapse: collapse;
                     width: 100%;
                     font-family: Arial, sans-serif;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.08); /* A bit more pronounced shadow */
+                    border-radius: 8px; /* Rounded corners for the table */
+                    overflow: hidden; /* Ensures border-radius applies to content */
                 }
                 th, td {
-                    border: 1px solid #ddd;
-                    padding: 8px;
+                    border: 1px solid #e0e0e0; /* Lighter borders */
+                    padding: 10px; /* Slightly more padding */
                     text-align: center;
+                    vertical-align: middle;
                 }
                 th {
-                    background-color: #4CAF50;
-                    color: white;
+                    background-color: #f0f2f6; /* Lighter header background */
+                    color: #333333; /* Darker text for headers */
                     font-weight: bold;
+                    text-transform: uppercase;
+                    font-size: 0.9em;
+                }
+                /* Removed: tr:nth-child(even) { background-color: #f9f9f9; } */
+                tr:hover { /* Hover effect */
+                    background-color: #f1f1f1;
                 }
                 .GANADOR {
-                    background-color: #90EE90; /* Light Green */
+                    background-color: #E6F7EA; /* Very Light Green */
                     font-weight: bold;
+                    border-left: 4px solid #4CAF50; /* Green highlight on left */
                 }
                 .ALTERNATIVA {
-                    background-color: #FFFFE0; /* Light Yellow */
+                    background-color: #FFFDE7; /* Very Light Yellow */
+                    border-left: 4px solid #FFC107; /* Amber highlight on left */
                 }
                 .OTROS {
-                    background-color: #F5F5F5; /* Light Gray */
+                    background-color: #F8F8F8; /* Even lighter gray */
+                }
+                .EXCLUIDA {
+                    background-color: #FFEBEE !important; /* Very Light Red */
+                    color: #D32F2F !important; /* Dark Red text */
+                    font-weight: bold;
+                    border-left: 4px solid #F44336 !important; /* Red highlight on left */
                 }
                 caption {
                     caption-side: bottom;
-                    font-size: 0.9em;
+                    font-size: 0.8em;
                     margin-top: 10px;
-                    color: #555;
+                    color: #777;
                 }
             </style>
             <table>
                 <thead>
                     <tr>
-                        {% for col in df.columns %}
+                        {% for col in df_to_render.columns %}
                         <th>{{ col }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for index, row in df.iterrows() %}
-                    <tr class="{{ row['Tipo_ML'] }}">
+                    {% for index, row in df_to_render.iterrows() %}
+                    {% set original_row = original_df_with_flags.loc[index] %} {# Get the full row from the original DataFrame #}
+                    <tr class="{{ original_row['Decisión'] }} {% if original_row['Es_Excluida'] %}EXCLUIDA{% endif %}">
                         {% for cell in row %}
                         <td>{{ cell }}</td>
                         {% endfor %}
@@ -282,15 +336,15 @@ def generate_comparison_table(df_bigquery, api_data):
                 </tbody>
             </table>
             """
-            from jinja2 import Template
             template = Template(html)
-            return template.render(df=df)
+            return template.render(df_to_render=df_to_render, original_df_with_flags=original_df_with_flags)
 
-        st.html(build_html_table(df_display))
+        # Call build_html_table with the df_display DataFrame that includes 'ES_EXCLUIDA'
+        st.html(build_html_table(df_display_for_html, df_display))
 
     else:
         st.warning("❌ Ocurrio un error y no fue posible generar la tabla comparativa:")
         if not api_data:
             st.write("   • No se encontró una solicitud a la API.")
         if df_bigquery.empty:
-            st.write("   • No se encontraron datoas en BigQuery.")
+            st.write("   • No se encontraron datos en BigQuery.")

@@ -16,8 +16,6 @@ def render_results_dashboard():
 
     data = st.session_state.prediction_data
     original_request = st.session_state.get('original_request', {})
-    df_bigquery = pd.DataFrame()
-    bq_client = get_bigquery_client()
 
     render_back_button()
     render_header(
@@ -29,24 +27,14 @@ def render_results_dashboard():
 
     if es_recalculo:
 
-        tab1, tab2 = st.tabs(["📊 Resultado Principal", "🔄 Resultado de Recálculo"])
-
-        with tab1:
-            st.info("📋 **Resultados originales del análisis**")
-            render_main_results(data, original_request)
-
-        with tab2:
-            st.success("🔄 **Resultados del recálculo ejecutado**")
-            render_recalculo_comparison(data)
-            # render_main_results(data, original_request)
+        render_recalculo_comparison(data)
+        render_main_results(data, original_request, recalculate=True)
+        render_all_options(data, original_request, recalculate=True)
 
     else:
 
         # Resultados principales
-        render_main_results(data, original_request)
-
-        # Calendario
-        render_delivery_calendar_view(data, original_request)
+        render_main_results(data, original_request, recalculate=False)
 
         # Visualizaciones
         # render_interactive_charts(data, original_request)
@@ -55,15 +43,7 @@ def render_results_dashboard():
 
         with tab1:
             # Información extraída directamente de BigQuery para el SKU y CP seleccionados
-            render_all_options(data)
-
-            if bq_client:
-                df_bigquery = execute_bigquery_query(bq_client, original_request)
-
-            if not df_bigquery.empty and data:
-                generate_comparison_table(df_bigquery, data)
-            else:
-                st.warning("Skipping comparison and additional analysis due to missing BigQuery or ML API data.")
+            render_all_options(data, original_request, recalculate=False)
 
         with tab2:
             # Enriquecimiento
@@ -77,34 +57,7 @@ def render_results_dashboard():
     #
     #     render_prediction_form()
 
-# def render_results_dashboard():
-#     """Dashboard de resultados simplificado"""
-#     data = st.session_state.prediction_data
-#     original_request = st.session_state.get('original_request', {})
-#
-#     render_back_button()
-#     render_header("📊 Resultados de Predicción", "Análisis de entrega")
-#
-#
-#     es_recalculo = data.get('es_recalculo', False)
-#
-#     if es_recalculo:
-#         tab1, tab2 = st.tabs(["📊 Resultado Principal", "🔄 Resultado de Recálculo"])
-#
-#         with tab1:
-#             st.info("📋 **Resultados principales del análisis**")
-#             render_main_results(data, original_request)
-#
-#         with tab2:
-#             st.success("🔄 **Resultados del recálculo ejecutado**")
-#             render_recalculo_comparison(data)
-#             render_main_results(data, original_request)
-#     else:
-#         render_main_results(data, original_request)
-#     render_recalculate_section(data, original_request)
-
-
-def render_main_results(data: dict, original_request: dict):
+def render_main_results(data: dict, original_request: dict, recalculate: bool = False):
     """Renderizar los resultados principales"""
 
     # Fecha promesa destacada
@@ -119,6 +72,9 @@ def render_main_results(data: dict, original_request: dict):
     # Desglose de detalles de entrega
     render_delivery_details(data)
 
+    # Calendario para visualización de fechas importantes
+    render_delivery_calendar_view(data, original_request, recalculate)
+
 
 def render_recalculo_comparison(data: dict):
     """Mostrar comparación del recálculo"""
@@ -128,14 +84,14 @@ def render_recalculo_comparison(data: dict):
 
     with col1:
         st.metric(
-            "📅 Fecha Original",
+            "📅 Fecha de Entrega Original",
             format_datetime(data.get('fecha_entrega_original', 'N/A')),
             help="Fecha de entrega de la predicción original"
         )
 
     with col2:
         st.metric(
-            "🎯 Fecha Nueva",
+            "🎯 Fecha Entrega Recálculo",
             format_datetime(data.get('fecha_entrega', 'N/A')),
             help="Nueva fecha de entrega después del recálculo"
         )
@@ -348,14 +304,15 @@ def execute_recalculation(data: dict, original_request: dict, priorizar_fecha_pr
                     st.success("🎉 **Recálculo completado exitosamente!**")
 
                     if result.get('es_recalculo', False):
-                        st.info(f"""
-                        **📊 Resumen del Recálculo:**
-                        - **Fecha entrega original:** {format_datetime(result.get('fecha_entrega_original', 'N/A'))}
-                        - **Fecha entrega nueva:** {format_datetime(result.get('fecha_entrega', 'N/A'))}
-                        - **Diferencia en días:** {result.get('dias_diferencia', 'N/A')}
-                        - **Fecha promesa mantenida:** {'✅ Sí' if result.get('fecha_promesa_mantenida', False) else '❌ No'}
-                        - **Diferencia de costo:** {format_currency(result.get('costo_diferencia', 0))}
-                        """)
+                        st.rerun()
+                        # st.info(f"""
+                        # **📊 Resumen del Recálculo:**
+                        # - **Fecha entrega original:** {format_datetime(result.get('fecha_entrega_original', 'N/A'))}
+                        # - **Fecha entrega nueva:** {format_datetime(result.get('fecha_entrega', 'N/A'))}
+                        # - **Diferencia en días:** {result.get('dias_diferencia', 'N/A')}
+                        # - **Fecha promesa mantenida:** {'✅ Sí' if result.get('fecha_promesa_mantenida', False) else '❌ No'}
+                        # - **Diferencia de costo:** {format_currency(result.get('costo_diferencia', 0))}
+                        # """)
 
                     if st.button("🔄 Ver Resultados Completos en Pestañas", type="primary", key="refresh_results"):
                         st.rerun()
@@ -511,6 +468,10 @@ def render_delivery_details(data: dict):
     """
     ruta_seleccionada = data.get('id_trazo', 'N/A')
     tienda_asignada = data.get('tienda', 'N/A')
+
+    # tienda_asignada = ['sfdsdf', 'sdfsfs', 'asfdfs']
+    # tienda_display = ", ".join(tienda_asignada)
+
     metodo = data.get('metodo', 'N/A')
     score = f"{data.get('score', 0):.3f}"
     costo_total = format_currency(data.get('costo', 0))
@@ -528,7 +489,7 @@ def render_delivery_details(data: dict):
             <h3 style='color: #6B5B73; text-align: center; margin-bottom: 2rem;'>🧿️ Detalles logísticos</h3>
             <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; text-align: center;'>
                 <div>
-                    <h4 style='color: #6B5B73; margin: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;'>🏪 Tienda Asignada</h4>
+                    <h4 style='color: #6B5B73; margin: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;'>🏪 Tienda(s) Asignada(s)</h4>
                     <p style='color: #4A4A4A; font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0;'>{tienda_asignada}</p>
                 </div>
                 <div>
@@ -563,6 +524,15 @@ def render_split_elements(data: dict):
     if es_split:
         split_info = data.get('split_info', {})
         if split_info:
+
+            # Obtenemos el total de tiendas usadas
+            rutas_info = split_info.get('detalle_rutas', {})
+            tiendas_seleccionadas = set()
+
+            for ruta in rutas_info:
+
+                tiendas_seleccionadas.add(ruta['tienda'])
+
             split_html_content = f"""
                 <div style='
                     background-color: #FFF3E0;
@@ -575,6 +545,7 @@ def render_split_elements(data: dict):
                     <h4 style='color: #FB8C00; margin: 0 0 0.5rem 0;'>📦 ENTREGA DIVIDIDA (SPLIT)</h4>
                     <ul style='list-style-position: inside; padding-left: 0;'>
                         <li style='margin-bottom: 0.3rem;'><strong>Rutas Seleccionadas:</strong> {split_info.get('rutas_seleccionadas', 'N/A')}</li>
+                        <li style='margin-bottom: 0.3rem;'><strong>Tiendas Seleccionadas:</strong> {tiendas_seleccionadas}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Cantidad Total:</strong> {split_info.get('cantidad_total', 'N/A')}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Costo Total:</strong> {format_currency(split_info.get('costo_total', 0))}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Tiempo Total:</strong> {split_info.get('tiempo_total', 'N/A')} días</li>
@@ -594,10 +565,15 @@ def render_split_elements(data: dict):
                                 <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Ruta</th>
                                 <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">ID Trazo</th>
                                 <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Tienda</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Inventario</th>
                                 <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Cantidad</th>
-                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Días</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Tiempo</th>
                                 <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Costo</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Método</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Capacidad_ME</th>
                                 <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Score</th>
+                                
+                                
                             </tr>
                         </thead>
                         <tbody>
@@ -610,10 +586,13 @@ def render_split_elements(data: dict):
                             <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">Ruta {i + 1}</td>
                             <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('id_trazo', 'N/A')}</td>
                             <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('tienda', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('inventario_disponible', 'N/A')}</td>
                             <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('cantidad', 'N/A')}</td>
                             <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('dias', 'N/A')}</td>
                             <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{format_currency(ruta.get('costo_total_ruta', 0))}</td>
-                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('score', 0):.3f}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('metodo', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('capacidad_me', 0):.3f}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('score', 'N/A')}</td>
                         </tr>
                         """
                 table_footer = "</tbody></table>"
@@ -622,8 +601,21 @@ def render_split_elements(data: dict):
 
             st.html(split_html_content)
 
-def render_all_options(data: dict):
-    return
+def render_all_options(data: dict, original_request: dict, recalculate: bool = False):
+    """
+    Consulta a Bigquery y despliega los resultados de la consulta del request
+    """
+    df_bigquery = pd.DataFrame()
+    bq_client = get_bigquery_client()
+
+    if bq_client:
+        df_bigquery = execute_bigquery_query(bq_client, original_request)
+
+    if not df_bigquery.empty and data:
+        generate_comparison_table(df_bigquery, data, original_request, recalculate)
+    else:
+        st.warning("Ocurrió un error al consultar BigQuery, por favor revisa tu conexión.")
+
 
 def render_context_info(data: dict):
     """
@@ -676,47 +668,89 @@ def render_interactive_charts(data: dict, original_request):
 
     return
 
-def render_delivery_calendar_view(data: dict, original_request: dict):
+def render_delivery_calendar_view(data: dict, original_request: dict, is_recalculation: bool):
     """
-    Renders a calendar view highlighting important delivery dates as events.
-    Focuses only on Fecha de Compra and Fecha de Entrega.
+    Muestra un calendario visual para resaltar fechas importantes en el trazo logistico.
+    Adapta las fechas mostradas si es un recálculo.
     """
-    st.subheader("🗓️ Fechas Clave del Pedido")
-
-    fecha_compra_str = original_request.get('fecha_compra', '')
-    fecha_entrega_str = data.get('fecha_entrega', '')
+    st.subheader("🗓️ Calendario de Fechas Importantes")
 
     events = []
+    initial_date = None # Initialize initial_date here
 
-    # Process Fecha de Compra
+    # --- Common: Fecha de Compra (always present in original_request) ---
+    fecha_compra_str = original_request.get('fecha_compra', '')
     if fecha_compra_str:
         try:
-            # Convert to date part only for calendar events
             fecha_compra_date = datetime.fromisoformat(fecha_compra_str.replace('Z', '+00:00')).date()
             events.append({
                 "title": "Fecha de Compra",
                 "start": fecha_compra_date.isoformat(),
                 "color": "#1E88E5", # Blue for purchase date
-                "borderColor": "#1565C0" # Darker blue border
+                "borderColor": "#1565C0"
             })
+            initial_date = fecha_compra_date.isoformat() # Set initial_date if purchase date is available
         except ValueError:
             st.warning(f"Advertencia: Formato de Fecha de Compra inválido: {fecha_compra_str}")
 
-    # Process Fecha de Entrega
-    if fecha_entrega_str:
-        try:
-            # Convert to date part only for calendar events
-            fecha_entrega_date = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00')).date()
-            events.append({
-                "title": "Fecha de Entrega",
-                "start": fecha_entrega_date.isoformat(),
-                "color": "#4CAF50", # Green for delivery date
-                "borderColor": "#388E3C" # Darker green border
-            })
-        except ValueError:
-            st.warning(f"Advertencia: Formato de Fecha de Entrega inválido: {fecha_entrega_str}")
+    # --- Conditional Logic for Recalculation ---
+    if is_recalculation:
+        st.info("Mostrando fechas para Recálculo.")
+        fecha_original_str = data.get('fecha_entrega_original', '') # Assuming 'fecha_entrega_original' exists in 'data'
+        fecha_nueva_str = data.get('fecha_entrega', '') # 'fecha_entrega' is the new one after recalculation
 
-    # Calendar options (customize as needed)
+        # Event: Fecha Original
+        if fecha_original_str:
+            try:
+                fecha_original_date = datetime.fromisoformat(fecha_original_str.replace('Z', '+00:00')).date()
+                events.append({
+                    "title": "Fecha Original",
+                    "start": fecha_original_date.isoformat(),
+                    "color": "#E57373", # Amber/Orange for original date
+                    "borderColor": "#D32F2F"
+                })
+                # Prioritize original date for initial view if recalculation
+                if not initial_date:
+                    initial_date = fecha_original_date.isoformat()
+            except ValueError:
+                st.warning(f"Advertencia: Formato de Fecha Original inválido: {fecha_original_str}")
+
+        # Event: Fecha Nueva (the recalculated delivery date)
+        if fecha_nueva_str:
+            try:
+                fecha_nueva_date = datetime.fromisoformat(fecha_nueva_str.replace('Z', '+00:00')).date()
+                events.append({
+                    "title": "Fecha Nueva",
+                    "start": fecha_nueva_date.isoformat(),
+                    "color": "#4CAF50", # Green for new delivery date
+                    "borderColor": "#388E3C"
+                })
+                # Prioritize new date for initial view if recalculation
+                if not initial_date:
+                    initial_date = fecha_nueva_date.isoformat()
+            except ValueError:
+                st.warning(f"Advertencia: Formato de Fecha Nueva inválido: {fecha_nueva_str}")
+
+    else: # Not a recalculation (original prediction)
+        st.info("Mostrando fechas para Predicción Original.")
+        fecha_entrega_str = data.get('fecha_entrega', '') # This is the delivery date for original prediction
+
+        # Event: Fecha de Entrega (for original prediction)
+        if fecha_entrega_str:
+            try:
+                fecha_entrega_date = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00')).date()
+                events.append({
+                    "title": "Fecha de Entrega",
+                    "start": fecha_entrega_date.isoformat(),
+                    "color": "#4CAF50", # Green for delivery date
+                    "borderColor": "#388E3C"
+                })
+                # Prioritize delivery date for initial view
+                if not initial_date:
+                    initial_date = fecha_entrega_date.isoformat()
+            except ValueError:
+                st.warning(f"Advertencia: Formato de Fecha de Entrega inválido: {fecha_entrega_str}")
+
     calendar_options = {
         "headerToolbar": {
             "left": "today prev,next",
@@ -726,45 +760,31 @@ def render_delivery_calendar_view(data: dict, original_request: dict):
         "initialView": "dayGridMonth",
         "editable": False,
         "selectable": False,
-        "height": "auto", # This is important: let content determine height
-        "contentHeight": "auto", # And this for content
+        "height": "auto",
+        "contentHeight": "auto",
+        "locale": "es" # Idioma del calendario
+
     }
 
-    # Set the initial date to focus the calendar.
-    initial_date = None
-    if fecha_entrega_str:
-        try:
-            initial_date = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00')).date().isoformat()
-        except ValueError:
-            pass
-    elif fecha_compra_str:
-        try:
-            initial_date = datetime.fromisoformat(fecha_compra_str.replace('Z', '+00:00')).date().isoformat()
-        except ValueError:
-            pass
-
-    if not initial_date:
-        initial_date = datetime.now().date().isoformat()
-
-    # --- Custom CSS for a LIGHT theme ---
+    # --- Custom CSS (keeping your light theme) ---
     custom_css = """
         .fc {
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            max-width: 600px; /* Adjust this value to control overall width */
-            margin: 0 auto; /* Center the calendar if max-width is set */
-            font-size: 0.85em; /* Reduce overall font size for calendar elements */
-            background-color: #F8F9FA; /* Very light gray background for the component */
+            max-width: 600px;
+            margin: 0 auto;
+            font-size: 0.85em;
+            background-color: #F8F9FA;
             border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         .fc .fc-toolbar-title {
-            color: #333333; /* Dark gray for title */
+            color: #333333;
             font-size: 1.4em;
         }
         .fc .fc-button {
-            background-color: #E0E0E0; /* Light gray button background */
+            background-color: #E0E0E0;
             border: 1px solid #CCCCCC;
-            color: #444444; /* Darker text for buttons */
+            color: #444444;
             border-radius: 5px;
             padding: 6px 10px;
             margin: 0 3px;
@@ -785,51 +805,51 @@ def render_delivery_calendar_view(data: dict, original_request: dict):
             border-radius: 3px;
             margin-bottom: 1px;
             font-weight: bold;
-            color: #FFFFFF !important; /* White text for events on colored background */
+            color: #FFFFFF !important;
         }
         .fc-daygrid-day-number {
-            color: #555555; /* Medium gray for day numbers */
+            color: #555555;
             font-size: 0.9em;
             font-weight: 500;
             padding-top: 2px;
         }
         .fc-day-other .fc-daygrid-day-number {
-            color: #AAAAAA; /* Lighter gray for days outside the current month */
+            color: #AAAAAA;
         }
         .fc-col-header-cell-cushion {
-            color: #444444; /* Dark gray for weekday names (Sun, Mon, etc.) */
+            color: #444444;
             font-weight: bold;
             text-transform: uppercase;
             font-size: 0.8em;
             padding-top: 5px;
             padding-bottom: 5px;
         }
-        .fc-daygrid-day.fc-day-today {
-            background-color: rgba(255, 255, 0, 0.2) !important; /* Slightly more visible yellow highlight for today */
-            border: 1px solid #FFEB3B; /* Brighter yellow border for today */
-        }
-        .fc-daygrid-day {
-            background-color: #FFFFFF; /* White background for each day cell */
-            border: 1px solid #E0E0E0; /* Light gray border between cells */
-            min-height: 70px;
-        }
         .fc-view-harness {
-            background-color: #FFFFFF; /* Overall white background for the calendar grid */
-            border-radius: 8px; /* Slightly less aggressive radius for light theme */
+            background-color: #FFFFFF;
+            border-radius: 8px;
             overflow: hidden;
         }
         .fc-scrollgrid-sync-table {
-            background-color: #FFFFFF; /* White background for the table itself */
+            background-color: #FFFFFF;
         }
         .fc-theme-standard td, .fc-theme-standard th {
-            border-color: #E0E0E0; /* Lighter borders for cells */
+            border-color: #E0E0E0;
         }
-        /* Further adjustments for cell height and padding */
         .fc-daygrid-body-unbalanced .fc-daygrid-day-events {
             margin-top: 0;
         }
         .fc-daygrid-body-unbalanced .fc-daygrid-day-frame {
             padding-bottom: 0;
+        }
+        .fc-daygrid-day.fc-day-today {
+            background-color: #FFFFFF !important; /* Set to white to remove yellow */
+            /* You can keep or remove the border as per your design preference */
+            border: 1px solid #E0E0E0 !important;
+        }
+        .fc-daygrid-day {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E0E0;
+            min-height: 70px;
         }
     """
 
@@ -837,8 +857,8 @@ def render_delivery_calendar_view(data: dict, original_request: dict):
     calendar(
         events=events,
         options=calendar_options,
-        custom_css=custom_css, # Apply the custom dark theme CSS
-        key="delivery_calendar_smaller", # Change key if you modify the component significantly
+        custom_css=custom_css,
+        key="delivery_calendar_conditional"
     )
 
 # Métodos auxiliares para el correcto renderizado

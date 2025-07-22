@@ -18,7 +18,7 @@ def execute_bigquery_query(client, original_request):
     sku_cve = original_request.get('sku_id', '')
     cp = original_request.get('codigo_postal', '')
     query = f"""
-        SELECT * FROM `liv-dev-dig-chatbot.Fecha_Estimada_Entrega.TB_FEE_RESULTADO_FINAL__JUL14`
+        SELECT * FROM `{Config.PROJECT_ID}.{Config.DATASET_ID}.{Config.TABLE_ID}`
         WHERE 1=1
         AND SKU_CVE = {sku_cve}
         AND CP = {cp}

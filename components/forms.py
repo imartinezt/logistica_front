@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime, timedelta, time
+import datetime as dt
 from config.settings import Config
 from services.api_client import APIClient
 from components.layout import render_header
@@ -51,12 +52,14 @@ def render_prediction_form():
                 key="temporada_input"
             )
 
+            date_testing = dt.date(2024, 7, 2)
             fecha_compra = st.date_input(
                 "Fecha de Compra",
                 value=datetime.now().date(),
                 key="fecha_input"
             )
 
+            time_testing = dt.time(10, 0, 0)
             hora_compra = st.time_input(
                 "Hora de Compra",
                 value=datetime.now().time(),
