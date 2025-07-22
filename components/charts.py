@@ -29,6 +29,7 @@ def render_results_dashboard():
 
         render_recalculo_comparison(data)
         render_main_results(data, original_request, recalculate=True)
+        # render_context_info(data)
         render_all_options(data, original_request, recalculate=True)
 
     else:
@@ -36,26 +37,21 @@ def render_results_dashboard():
         # Resultados principales
         render_main_results(data, original_request, recalculate=False)
 
+        # Enriquecimiento
+        # render_context_info(data)
+
         # Visualizaciones
         # render_interactive_charts(data, original_request)
 
-        tab1, tab2, tab3 = st.tabs([f"Información general", "Enriquecimiento", "Recálculo"])
+        tab1, tab2 = st.tabs([f"Información general", "Recálculo"])
 
         with tab1:
             # Información extraída directamente de BigQuery para el SKU y CP seleccionados
             render_all_options(data, original_request, recalculate=False)
 
         with tab2:
-            # Enriquecimiento
-            render_context_info(data)
-
-        with tab3:
             # Recálculo
             render_recalculate_section(data, original_request)
-
-    # with opt_tab3:
-    #
-    #     render_prediction_form()
 
 def render_main_results(data: dict, original_request: dict, recalculate: bool = False):
     """Renderizar los resultados principales"""
@@ -75,6 +71,11 @@ def render_main_results(data: dict, original_request: dict, recalculate: bool = 
     # Calendario para visualización de fechas importantes
     render_delivery_calendar_view(data, original_request, recalculate)
 
+    # Detalles técnicos
+    render_technical_details(data)
+
+    # Enriquecimiento del código postal destino
+    # render_context_info(data)
 
 def render_recalculo_comparison(data: dict):
     """Mostrar comparación del recálculo"""
@@ -191,8 +192,7 @@ def render_alternatives_table(data: dict):
 # Recalculo
 def render_recalculate_section(data: dict, original_request: dict):
     """Sección de recálculo"""
-    st.markdown("---")
-    st.subheader("🔄 Recálculo de Entrega")
+    st.subheader("⚙️ Configuración para el Recálculo de Entrega")
 
     fecha_entrega_promesa = data.get('fecha_entrega', '')
     tienda_rechazada = data.get('tienda', 0)
@@ -209,28 +209,27 @@ def render_recalculate_section(data: dict, original_request: dict):
         st.warning("⚠️ No se pueden realizar recálculos. Faltan datos del request original.")
         return
 
-    with st.expander("⚙️ Configurar Recálculo", expanded=False):
-        st.markdown("**Datos del recálculo (extraídos automáticamente):**")
+    st.markdown("**Datos del recálculo (extraídos automáticamente):**")
 
-        col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(3)
 
-        with col1:
-            st.info(f"**Código postal:** {original_request.get('codigo_postal', '')}")
-            st.info(f"**SKU:** {original_request.get('sku_id', '')}")
+    with col1:
+        st.info(f"**Código postal:** {original_request.get('codigo_postal', '')}")
+        st.info(f"**SKU:** {original_request.get('sku_id', '')}")
 
-        with col2:
-            st.info(f"**Fecha Compra Original:** {format_datetime(original_request.get('fecha_compra', ''))}")
-            st.info(f"**Fecha Entrega Promesa:** {format_datetime(fecha_entrega_promesa)}")
+    with col2:
+        st.info(f"**Fecha Compra Original:** {format_datetime(original_request.get('fecha_compra', ''))}")
+        st.info(f"**Fecha Entrega Promesa:** {format_datetime(fecha_entrega_promesa)}")
 
-        with col3:
-            st.info(f"**Tienda a Rechazar:** {tienda_rechazada}")
-            st.info(f"**Rutas a Rechazar:** {', '.join(rutas_seleccionadas) if rutas_seleccionadas else 'Ninguna'}")
+    with col3:
+        st.info(f"**Tienda a Rechazar:** {tienda_rechazada}")
+        st.info(f"**Rutas a Rechazar:** {', '.join(rutas_seleccionadas) if rutas_seleccionadas else 'Ninguna'}")
 
-            priorizar_fecha_promesa = st.checkbox(
-                "Priorizar Fecha Promesa",
-                help="Si está activado, priorizará mantener la fecha promesa original"
-            )
-            st.session_state.priorizar_fecha_promesa = priorizar_fecha_promesa
+        priorizar_fecha_promesa = st.checkbox(
+            "Priorizar Fecha Promesa",
+            help="Si está activado, priorizará mantener la fecha promesa original"
+        )
+        st.session_state.priorizar_fecha_promesa = priorizar_fecha_promesa
 
     if st.checkbox("📋 Ver datos que se enviarán al API", value=False):
         request_data = {
@@ -249,7 +248,6 @@ def render_recalculate_section(data: dict, original_request: dict):
     if st.button("🔄 Ejecutar Recálculo", type="secondary", use_container_width=True):
         priorizar = st.session_state.get('priorizar_fecha_promesa', False)
         st.session_state.show_results = True
-
         execute_recalculation(data, original_request, priorizar, rutas_seleccionadas)
 
 def execute_recalculation(data: dict, original_request: dict, priorizar_fecha_promesa: bool, rutas_rechazadas: list):
@@ -305,14 +303,6 @@ def execute_recalculation(data: dict, original_request: dict, priorizar_fecha_pr
 
                     if result.get('es_recalculo', False):
                         st.rerun()
-                        # st.info(f"""
-                        # **📊 Resumen del Recálculo:**
-                        # - **Fecha entrega original:** {format_datetime(result.get('fecha_entrega_original', 'N/A'))}
-                        # - **Fecha entrega nueva:** {format_datetime(result.get('fecha_entrega', 'N/A'))}
-                        # - **Diferencia en días:** {result.get('dias_diferencia', 'N/A')}
-                        # - **Fecha promesa mantenida:** {'✅ Sí' if result.get('fecha_promesa_mantenida', False) else '❌ No'}
-                        # - **Diferencia de costo:** {format_currency(result.get('costo_diferencia', 0))}
-                        # """)
 
                     if st.button("🔄 Ver Resultados Completos en Pestañas", type="primary", key="refresh_results"):
                         st.rerun()
@@ -467,10 +457,23 @@ def render_delivery_details(data: dict):
     Muestra detalles para llevar a cabo la entrega
     """
     ruta_seleccionada = data.get('id_trazo', 'N/A')
-    tienda_asignada = data.get('tienda', 'N/A')
 
-    # tienda_asignada = ['sfdsdf', 'sdfsfs', 'asfdfs']
-    # tienda_display = ", ".join(tienda_asignada)
+    es_split = data.get("es_split", False)
+
+    if not es_split:
+
+        tiendas_asignadas = data.get('tienda', 'N/A')
+
+    else:
+
+        split_info = data.get('split_info', {})
+
+        # Obtenemos el total de tiendas involucradas
+        rutas_info = split_info.get('detalle_rutas', {})
+        tiendas_asignadas = set()
+
+        for ruta in rutas_info:
+            tiendas_asignadas.add(ruta['tienda'])
 
     metodo = data.get('metodo', 'N/A')
     score = f"{data.get('score', 0):.3f}"
@@ -490,7 +493,7 @@ def render_delivery_details(data: dict):
             <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; text-align: center;'>
                 <div>
                     <h4 style='color: #6B5B73; margin: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;'>🏪 Tienda(s) Asignada(s)</h4>
-                    <p style='color: #4A4A4A; font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0;'>{tienda_asignada}</p>
+                    <p style='color: #4A4A4A; font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0;'>{tiendas_asignadas}</p>
                 </div>
                 <div>
                     <h4 style='color: #6B5B73; margin: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;'>🗺️ Ruta Seleccionada</h4>
@@ -545,7 +548,7 @@ def render_split_elements(data: dict):
                     <h4 style='color: #FB8C00; margin: 0 0 0.5rem 0;'>📦 ENTREGA DIVIDIDA (SPLIT)</h4>
                     <ul style='list-style-position: inside; padding-left: 0;'>
                         <li style='margin-bottom: 0.3rem;'><strong>Rutas Seleccionadas:</strong> {split_info.get('rutas_seleccionadas', 'N/A')}</li>
-                        <li style='margin-bottom: 0.3rem;'><strong>Tiendas Seleccionadas:</strong> {tiendas_seleccionadas}</li>
+                        <li style='margin-bottom: 0.3rem;'><strong>Tiendas Seleccionadas:</strong> {len(tiendas_seleccionadas)}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Cantidad Total:</strong> {split_info.get('cantidad_total', 'N/A')}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Costo Total:</strong> {format_currency(split_info.get('costo_total', 0))}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Tiempo Total:</strong> {split_info.get('tiempo_total', 'N/A')} días</li>
@@ -659,7 +662,12 @@ def render_technical_details(data: dict):
     Muestra detalles relacionados con el procesamiento del sistema
     """
 
-    return
+    st.subheader("️⚙️ Detalles técnicos")
+
+    tiempo_procesamiento = data.get('tiempo_proceso_ms', 'N/A')
+
+    st.metric("🕐 Tiempo de procesamiento (ms)", tiempo_procesamiento)
+
 
 def render_interactive_charts(data: dict, original_request):
     """Renderizar gráficos interactivos"""
