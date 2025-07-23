@@ -610,13 +610,14 @@ def render_all_options(data: dict, original_request: dict, recalculate: bool = F
     Consulta a Bigquery y despliega los resultados de la consulta del request
     """
     df_bigquery = pd.DataFrame()
-    bq_client = get_bigquery_client()
+    bq_client = get_bigquery_client() # Mandar la service account
 
     if bq_client:
         df_bigquery = execute_bigquery_query(bq_client, original_request)
 
-    if not df_bigquery.empty and data:
-        generate_comparison_table(df_bigquery, data, original_request, recalculate)
+        if not df_bigquery.empty and data:
+            generate_comparison_table(df_bigquery, data, original_request, recalculate)
+
     else:
         st.warning("Ocurrió un error al consultar BigQuery, por favor revisa tu conexión.")
 

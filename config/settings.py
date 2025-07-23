@@ -1,3 +1,9 @@
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 class Config:
 
     # API endpoints
@@ -22,10 +28,8 @@ class Config:
     CHART_HEIGHT = "400px"
     TEMPORADAS = ["TEMPORADA_ALTA", "TEMPORADA_BAJA"]
 
-    # ------------------------------------------------------------------
-    # Google Cloud / BigQuery Configuration
-    # ------------------------------------------------------------------
-    PROJECT_ID: str = "liv-dev-dig-chatbot"
-    DATASET_ID: str = "Fecha_Estimada_Entrega"
-    TABLE_ID: str = "TB_FEE_RESULTADO_CON_TIEMPO3_UUID"
-    TABLE_ID_ORIGINAL: str = "TB_FEE_RESULTADO_FINAL__JUL14_OPTIMIZED"
+    # =================================== Configuración para PROD ============================
+    SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT").replace("\r", "")
+    PROJECT_ID = os.getenv("PROJECT_ID").replace("\r", "")
+    DATASET_ID = os.getenv("DATASET_ID").replace("\r", "")
+    TABLE_ID = os.getenv("TABLE_ID").replace("\r", "")

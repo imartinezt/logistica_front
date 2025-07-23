@@ -5,12 +5,13 @@ from google.cloud import bigquery
 
 @st.cache_resource
 def get_bigquery_client():
-    """Initializes and returns a BigQuery client."""
     try:
-        client = bigquery.Client(project=Config.PROJECT_ID)
+        client = bigquery.Client.from_service_account_json(Config.SERVICE_ACCOUNT_FILE)
         return client
     except Exception as e:
+        print(f"Error inicializando cliente DEV: {str(e)}")
         return None
+
 
 def execute_bigquery_query(client, original_request):
     """Executes the BigQuery query and returns a DataFrame."""
