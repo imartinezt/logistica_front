@@ -18,8 +18,8 @@ class Config:
 
     # Default parameters
     LAYOUT = "wide"
-    DEFAULT_CP = "02125"
-    DEFAULT_SKU = "1147407030"
+    DEFAULT_CP = "14650"
+    DEFAULT_SKU = "1159567954"
     DEFAULT_QUANTITY = 1
     DEFAULT_TEMPORADA = "TEMPORADA_ALTA"
     MIN_CP_LENGTH = 5
@@ -28,7 +28,7 @@ class Config:
     CHART_HEIGHT = "400px"
     TEMPORADAS = ["TEMPORADA_ALTA", "TEMPORADA_BAJA"]
 
-    # =================================== Configuración para PROD ============================
+    # =================================== Configuración BigQuery ============================
     SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT").replace("\r", "")
     PROJECT_ID = os.getenv("PROJECT_ID").replace("\r", "")
     DATASET_ID = os.getenv("DATASET_ID").replace("\r", "")

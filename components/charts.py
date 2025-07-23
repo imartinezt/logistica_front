@@ -82,6 +82,15 @@ def render_recalculo_comparison(data: dict):
     """Mostrar comparación del recálculo"""
     st.markdown("### 🔄 Comparación del Recálculo")
 
+    tienda_rechazada = data.get('tienda_rechazada', 'N/A')
+
+    # Caso split
+    es_split = data.get('es_split', False)
+
+    if es_split:
+        tienda_rechazada = st.session_state.tienda_rechazada
+
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -124,8 +133,7 @@ def render_recalculo_comparison(data: dict):
         st.info(f"**Diferencia de Costo:** {format_currency(costo_diff)}")
 
     with col2:
-        tienda_rechazada = data.get('tienda_rechazada', 'N/A')
-        st.info(f"**Tienda Rechazada:** {tienda_rechazada}")
+        st.info(f"**Tienda(s) Rechazada(s):** {tienda_rechazada}")
 
         rutas_descartadas = data.get('rutas_descartadas', [])
         rutas_text = ', '.join(rutas_descartadas) if rutas_descartadas else 'Ninguna'
@@ -206,6 +214,25 @@ def render_recalculate_section(data: dict, original_request: dict):
         tienda_rechazada
     )
 
+
+    es_split = data.get('es_split', False)
+
+    if es_split:
+
+        split_info = data.get('split_info', {})
+        if split_info:
+
+            # Obtenemos el total de tiendas usadas
+            rutas_info = split_info.get('detalle_rutas', {})
+            tiendas_seleccionadas = set()
+
+            for ruta in rutas_info:
+                tiendas_seleccionadas.add(ruta['tienda'])
+
+            tienda_rechazada = tiendas_seleccionadas
+
+
+
     if not can_recalculate:
         st.warning("⚠️ No se pueden realizar recálculos. Faltan datos del request original.")
         return
@@ -223,7 +250,7 @@ def render_recalculate_section(data: dict, original_request: dict):
         st.info(f"**Fecha Entrega Promesa:** {format_datetime(fecha_entrega_promesa)}")
 
     with col3:
-        st.info(f"**Tienda a Rechazar:** {tienda_rechazada}")
+        st.info(f"**Tienda(s) a Rechazar:** {tienda_rechazada}")
         st.info(f"**Rutas a Rechazar:** {', '.join(rutas_seleccionadas) if rutas_seleccionadas else 'Ninguna'}")
 
         priorizar_fecha_promesa = st.checkbox(
@@ -231,6 +258,7 @@ def render_recalculate_section(data: dict, original_request: dict):
             help="Si está activado, priorizará mantener la fecha promesa original"
         )
         st.session_state.priorizar_fecha_promesa = priorizar_fecha_promesa
+        st.session_state.tienda_rechazada = tienda_rechazada
 
     if st.checkbox("📋 Ver datos que se enviarán al API", value=False):
         request_data = {

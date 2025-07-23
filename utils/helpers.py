@@ -18,6 +18,8 @@ def init_session_state():
         st.session_state.hora_compra = datetime.now().time()
     if 'fecha_compra' not in st.session_state:
         st.session_state.fecha_compra = datetime.now().date()
+    if 'tienda_rechazada' not in st.session_state:
+        st.session_state.tienda_rechazada = None
 
 def format_currency(amount: float) -> str:
     """Formatear cantidad como moneda mexicana"""
@@ -161,6 +163,7 @@ def highlight_selected_row(row):
         return ['background-color: #d4edda'] * len(row)
     return [''] * len(row)
 
+
 def generate_comparison_table(df_bigquery, api_data: dict, original_request: dict, recalculate: bool = False):
     """Generates and styles the comparison DataFrame for display."""
     st.subheader("🎨Tabla Comparativa de Rutas")
@@ -168,7 +171,6 @@ def generate_comparison_table(df_bigquery, api_data: dict, original_request: dic
     if api_data and not df_bigquery.empty:
         ganadores = []  # selected: true
         alternativas = []  # selected: false
-        excluded_stores = []
 
         for alt in api_data.get('alternativas', []):
             if alt.get('selected', False):
@@ -177,7 +179,6 @@ def generate_comparison_table(df_bigquery, api_data: dict, original_request: dic
                 alternativas.append(alt.get('id', ''))
 
         # Formateo para frontend
-
         ganadores_display = ", ".join(ganadores)
         alternativas_display = ", ".join(alternativas)
 
@@ -195,31 +196,39 @@ def generate_comparison_table(df_bigquery, api_data: dict, original_request: dic
 
         df_bigquery['CLASIFICACION_ML'] = df_bigquery.apply(clasificar_ruta, axis=1)
 
-        # Modificación, para caso split
-        # excluded_stores = api_data.get('tiendas_rechazadas', None)
-        # excluded_stores = ['']
-
         # --- Identify excluded store ---
         excluded_store_cve = api_data.get('tienda_rechazada', None)
+        es_split = api_data.get('es_split', False)
+        es_recalculo = api_data.get('es_recalculo', False)
 
-        # if excluded_stores:
-        #     st.warning(f"🚨 **Se detectarón tiendas excluidas:** Se resaltarán en rojo las rutas de las siguientes tiendas **{excluded_stores}**.")
-        #
-        #     for store in excluded_stores:
-        #
-        #         if store and 'TDA_CVE' in df_bigquery.columns:
-        #             df_bigquery['ES_EXCLUIDA'] = df_bigquery['TDA_CVE'] == store
-        #         else:
-        #             df_bigquery['ES_EXCLUIDA'] = False
-        if excluded_store_cve:
-            st.warning(f"🚨 **Tienda Excluida detectada:** Se resaltarán en rojo las rutas de la tienda **{excluded_store_cve}**.")
+        # Inicializa la columna ES_EXCLUIDA a False para todas las filas
+        # Esto es crucial para que las rutas no excluidas no se queden sin valor
+        # y para que las condiciones posteriores puedan establecerla a True.
+        df_bigquery['ES_EXCLUIDA'] = False
 
-        # Add a column to mark excluded rows for styling
+        # Caso complejo recalculo (split)
+        if es_split and es_recalculo:
+            # Asegúrate de que 'tienda_rechazada' en session_state sea una lista
+            excluded_stores = st.session_state.get('tienda_rechazada', [])
+            if excluded_stores and 'TDA_CVE' in df_bigquery.columns:
+                # Convertir todos los elementos de excluded_stores a string antes de unirlos
+                excluded_stores_str = [str(s) for s in excluded_stores]
+                st.warning(
+                    f"🚨 **Se detectaron tiendas excluidas:** Se resaltarán en rojo las rutas de las siguientes tiendas **{', '.join(excluded_stores_str)}**.")
+                # Usa .isin() para marcar todas las filas donde TDA_CVE esté en la lista de tiendas excluidas
+                df_bigquery['ES_EXCLUIDA'] = df_bigquery['TDA_CVE'].isin(excluded_stores)
+            # Si excluded_stores está vacío o TDA_CVE no existe, ES_EXCLUIDA permanece False
 
-        if excluded_store_cve and 'TDA_CVE' in df_bigquery.columns:
-            df_bigquery['ES_EXCLUIDA'] = df_bigquery['TDA_CVE'] == excluded_store_cve
-        else:
-            df_bigquery['ES_EXCLUIDA'] = False
+        elif es_recalculo and not es_split:
+            if excluded_store_cve and 'TDA_CVE' in df_bigquery.columns:
+                st.warning(
+                    f"🚨 **Tienda Excluida detectada:** Se resaltarán en rojo las rutas de la tienda **{excluded_store_cve}**.")
+                # Caso simple de recalculo (una sola tienda excluida)
+                df_bigquery['ES_EXCLUIDA'] = df_bigquery['TDA_CVE'] == excluded_store_cve
+            # Si excluded_store_cve es None o TDA_CVE no existe, ES_EXCLUIDA permanece False
+
+        # El bloque 'elif not es_recalculo:' ya no es necesario
+        # porque ES_EXCLUIDA se inicializa a False al principio.
 
         conteos = df_bigquery['CLASIFICACION_ML'].value_counts()
         st.write("📊 **Distribución de las rutas:**")
@@ -227,7 +236,9 @@ def generate_comparison_table(df_bigquery, api_data: dict, original_request: dic
             emoji = "🏆" if tipo == "GANADOR" else "🥈" if tipo == "ALTERNATIVA" else "📋"
             st.write(f"{emoji} {tipo}: {cantidad} rutas")
 
-        columnas_display = ['ID_TRAZO', 'SKU_CVE', 'CP', 'TDA_CVE', 'INVENTARIO_OH', 'MET_ENTREGA', 'REAL_CAP_STORE', 'CAPACIDAD_ME', 'TIEMPO_3', 'COSTO', 'ZONA_ROJA', 'TRAFICO', 'DESASTRE_NATURAL', 'EXCL_PROD', 'TUBERIA', 'CLASIFICACION_ML']
+        columnas_display = ['ID_TRAZO', 'SKU_CVE', 'CP', 'TDA_CVE', 'INVENTARIO_OH', 'MET_ENTREGA', 'REAL_CAP_STORE',
+                            'CAPACIDAD_ME', 'TIEMPO_3', 'COSTO', 'ZONA_ROJA', 'TRAFICO', 'DESASTRE_NATURAL',
+                            'EXCL_PROD', 'TUBERIA', 'CLASIFICACION_ML']
         columnas_disponibles = [col for col in columnas_display if col in df_bigquery.columns]
 
         df_display = df_bigquery[columnas_disponibles + ['ES_EXCLUIDA']].copy()
@@ -259,9 +270,7 @@ def generate_comparison_table(df_bigquery, api_data: dict, original_request: dic
         df_display['_orden'] = df_display['Decisión'].map(orden_clasificacion)
         df_display = df_display.sort_values(['_orden', 'Tiempo', 'Costo']).drop('_orden', axis=1)
 
-
         df_display_for_html = df_display.drop('Es_Excluida', axis=1, errors='ignore')
-
 
         def build_html_table(df_to_render, original_df_with_flags):
             html = """
