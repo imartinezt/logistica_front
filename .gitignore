@@ -27,3 +27,6 @@ __pycache__/
 requirements.txt
 build.sh
 Dockerfile
+
+# CI-CD
+*.sh
