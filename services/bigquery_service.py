@@ -67,7 +67,7 @@ def execute_bigquery_query(client, original_request):
 
 def compare_bigquery_with_results(df_bigquery: pd.DataFrame, prediction_data: dict) -> pd.DataFrame:
     """
-    Comparar datos de BigQuery con resultados del algoritmo y pintar según match exacto
+    Comparar datos de BigQuery con resultados del algoritmo y pintar según match EXACTO
 
     Args:
         df_bigquery: DataFrame de BigQuery con todas las opciones (columnas reales)
@@ -102,59 +102,36 @@ def compare_bigquery_with_results(df_bigquery: pd.DataFrame, prediction_data: di
             tienda_col = col
             break
 
-    # Debug: mostrar qué columnas encontramos
     print(f"DEBUG - Columna ID_TRAZO encontrada: {id_trazo_col}")
     print(f"DEBUG - Columna TIENDA encontrada: {tienda_col}")
     print(f"DEBUG - Alternativas del API: {len(alternativas)}")
 
-    # Clasificar cada registro según el API - MATCH EXACTO PRIORITARIO
-    for idx, row in df_result.iterrows():
-        match_found = False
+    # Crear un set de IDs ya procesados para evitar duplicados
+    processed_ids = set()
 
-        # PASO 1: Intentar match EXACTO por ID_TRAZO (prioritario)
+    # Clasificar cada registro según el API - SOLO POR ID_TRAZO EXACTO
+    for idx, row in df_result.iterrows():
+
+        # Solo intentar match por ID_TRAZO si existe la columna
         if id_trazo_col and id_trazo_col in row:
             id_trazo_bq = str(row[id_trazo_col]).strip()
 
+            # Buscar match exacto por ID_TRAZO en las alternativas del API
             for alt in alternativas:
                 api_id = str(alt.get('id', '')).strip()
 
-                if id_trazo_bq == api_id and api_id != '':  # Match exacto y no vacío
+                if id_trazo_bq == api_id and api_id not in processed_ids:
                     if alt.get('selected', False):
                         df_result.at[idx, 'STATUS_ML'] = 'GANADOR'
-                        print(f"DEBUG - GANADOR por ID_TRAZO: {id_trazo_bq}")
+                        print(f"DEBUG - GANADOR por ID_TRAZO: {api_id}")
                     else:
                         df_result.at[idx, 'STATUS_ML'] = 'ALTERNATIVA'
-                        print(f"DEBUG - ALTERNATIVA por ID_TRAZO: {id_trazo_bq}")
-                    match_found = True
+                        print(f"DEBUG - ALTERNATIVA por ID_TRAZO: {api_id}")
+
+                    processed_ids.add(api_id)
                     break
 
-        # PASO 2: Solo si NO hubo match por ID_TRAZO, intentar por TIENDA
-        if not match_found and tienda_col and tienda_col in row:
-            tienda_bq = row[tienda_col]
-
-            for alt in alternativas:
-                api_tienda = alt.get('tienda', 0)
-
-                if tienda_bq == api_tienda and api_tienda != 0:  # Match por tienda
-                    # PERO solo si el ID_TRAZO de BigQuery NO aparece en ninguna alternativa
-                    # (para evitar duplicados cuando ya hay match exacto)
-                    id_trazo_bq = str(row.get(id_trazo_col, '')).strip() if id_trazo_col else ''
-                    id_ya_matcheado = any(
-                        str(a.get('id', '')).strip() == id_trazo_bq
-                        for a in alternativas
-                        if id_trazo_bq != ''
-                    )
-
-                    if not id_ya_matcheado:  # Solo marcar si el ID no está en alternativas
-                        if alt.get('selected', False):
-                            df_result.at[idx, 'STATUS_ML'] = 'GANADOR'
-                            print(f"DEBUG - GANADOR por TIENDA: {tienda_bq}")
-                        else:
-                            df_result.at[idx, 'STATUS_ML'] = 'ALTERNATIVA'
-                            print(f"DEBUG - ALTERNATIVA por TIENDA: {tienda_bq}")
-                        break
-
-    # Contar resultados para debug
+    # Contar resultados
     ganadores = len(df_result[df_result['STATUS_ML'] == 'GANADOR'])
     alternativas_count = len(df_result[df_result['STATUS_ML'] == 'ALTERNATIVA'])
     sin_match = len(df_result[df_result['STATUS_ML'] == 'SIN_MATCH'])
