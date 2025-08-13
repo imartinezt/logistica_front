@@ -14,7 +14,6 @@ def render_results_page():
     original_request = st.session_state.get('original_request', {})
 
     # Validación de caso recalculo
-
     es_recalculo = data.get('es_recalculo', False)
 
     if es_recalculo:
@@ -29,7 +28,6 @@ def render_results_page():
         render_main_results(data, original_request)
         render_recalculate_section(data, original_request)
 
-        # render_recalculate_section(data, original_request)
 
 def render_main_results(data: dict, original_request: dict):
     """
@@ -503,6 +501,9 @@ def render_bigquery_table_with_colors(df_with_status: pd.DataFrame):
             return ['background-color: #dcfce7; color: #166534; font-weight: bold'] * len(row)  # Verde
         elif status == 'ALTERNATIVA':
             return ['background-color: #fef3c7; color: #92400e'] * len(row)  # Amarillo
+        elif status == 'RECHAZADA':
+            return ['background-color: #ff0000; color: #ee4b2b'] * len(row)
+
         else:
             return ['background-color: #f9fafb; color: #374151'] * len(row)  # Gris claro
 
