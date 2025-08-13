@@ -41,26 +41,13 @@ def execute_bigquery_query(client, original_request):
         return pd.DataFrame()
 
     query = f"""
-        SELECT 
-            TIENDA,
-            SKU_CVE,
-            CP,
-            MET_ENTREGA,
-            INVENTARIO_OH,
-            DIAS_ENTREGA,
-            COSTO_FIJO,
-            CAPACIDAD_STORE,
-            CAPACIDAD_ME,
-            ZONA_ROJA,
-            EXCL_PROD,
-            ACTIVO
-        FROM `{Config.PROJECT_ID}.{Config.DATASET_ID}.{Config.TABLE_ID}`
+        SELECT * FROM `{Config.PROJECT_ID}.{Config.DATASET_ID}.{Config.TABLE_ID}`
         WHERE 1=1
-            AND CAST(SKU_CVE AS STRING) = '{sku_cve}'
-            AND CAST(CP AS STRING) = '{cp}'
+            AND SKU_CVE = {sku_cve}
+            AND CP = {cp}
+            AND NOT (MET_ENTREGA = 'FLOTA LIVERPOOL' AND ZONA_ROJA = 1)
+            AND NOT (MET_ENTREGA = 'MENSAJERIA EXTERNA' AND EXCL_PROD != 0)
             AND INVENTARIO_OH > 0
-            AND ACTIVO = 1
-        ORDER BY DIAS_ENTREGA ASC, COSTO_FIJO ASC
     """
 
     try:
@@ -80,95 +67,105 @@ def execute_bigquery_query(client, original_request):
 
 def compare_bigquery_with_results(df_bigquery: pd.DataFrame, prediction_data: dict) -> pd.DataFrame:
     """
-    Comparar datos de BigQuery con resultados del algoritmo
+    Comparar datos de BigQuery con resultados del algoritmo y pintar según match exacto
 
     Args:
-        df_bigquery: DataFrame de BigQuery con todas las opciones
+        df_bigquery: DataFrame de BigQuery con todas las opciones (columnas reales)
         prediction_data: Datos de predicción del algoritmo
 
     Returns:
-        DataFrame: Datos enriquecidos con status de selección
+        DataFrame: Datos con columna de STATUS para pintar
     """
     if df_bigquery.empty:
         return df_bigquery
 
     # Crear copia para no modificar original
-    df_enriched = df_bigquery.copy()
-    df_enriched['STATUS'] = '🔘 Disponible'
-    df_enriched['SELECCIONADO'] = False
-    df_enriched['RANK'] = None
-    df_enriched['SCORE'] = None
+    df_result = df_bigquery.copy()
+    df_result['STATUS_ML'] = 'SIN_MATCH'
 
-    # Obtener tiendas seleccionadas del algoritmo
-    selected_stores = set()
-
-    # Manejar splits
-    if prediction_data.get('es_split', False):
-        split_info = prediction_data.get('split_info', {})
-        detalle_rutas = split_info.get('detalle_rutas', [])
-        for ruta in detalle_rutas:
-            selected_stores.add(ruta.get('tienda'))
-    else:
-        tienda = prediction_data.get('tienda')
-        if tienda:
-            selected_stores.add(tienda)
-
-    # Obtener información de alternativas
+    # Obtener alternativas del API
     alternativas = prediction_data.get('alternativas', [])
-    tienda_to_info = {}
 
-    for alt in alternativas:
-        tienda = alt.get('tienda')
-        if tienda:
-            tienda_to_info[tienda] = {
-                'rank': alt.get('rank'),
-                'score': alt.get('score', 0),
-                'selected': alt.get('selected', False)
-            }
+    # Buscar qué columnas existen para hacer el match
+    id_trazo_col = None
+    tienda_col = None
 
-    # Marcar registros según su status
-    for idx, row in df_enriched.iterrows():
-        tienda = row['TIENDA']
+    # Buscar columna de ID_TRAZO (puede tener diferentes nombres)
+    for col in df_result.columns:
+        if 'ID_TRAZO' in str(col).upper() or 'TRAZO' in str(col).upper():
+            id_trazo_col = col
+            break
 
-        if tienda in tienda_to_info:
-            info = tienda_to_info[tienda]
-            df_enriched.at[idx, 'RANK'] = info['rank']
-            df_enriched.at[idx, 'SCORE'] = info['score']
+    # Buscar columna de TIENDA
+    for col in df_result.columns:
+        if 'TIENDA' in str(col).upper() or 'TDA' in str(col).upper():
+            tienda_col = col
+            break
 
-            if info['selected']:
-                df_enriched.at[idx, 'STATUS'] = '🟢 Seleccionado'
-                df_enriched.at[idx, 'SELECCIONADO'] = True
-            else:
-                df_enriched.at[idx, 'STATUS'] = '🟡 Evaluado'
-        else:
-            # Verificar si fue descartado por reglas de negocio
-            met_entrega = row['MET_ENTREGA']
-            zona_roja = row.get('ZONA_ROJA', 0)
-            excl_prod = row.get('EXCL_PROD', 0)
+    # Debug: mostrar qué columnas encontramos
+    print(f"DEBUG - Columna ID_TRAZO encontrada: {id_trazo_col}")
+    print(f"DEBUG - Columna TIENDA encontrada: {tienda_col}")
+    print(f"DEBUG - Alternativas del API: {len(alternativas)}")
 
-            if (met_entrega == 'FLOTA LIVERPOOL' and zona_roja == 1) or \
-                    (met_entrega == 'MENSAJERIA EXTERNA' and excl_prod != 0):
-                df_enriched.at[idx, 'STATUS'] = '🔴 Descartado (Reglas)'
-            else:
-                df_enriched.at[idx, 'STATUS'] = '⚪ No Evaluado'
+    # Clasificar cada registro según el API - MATCH EXACTO PRIORITARIO
+    for idx, row in df_result.iterrows():
+        match_found = False
 
-    # Reordenar columnas
-    column_order = [
-        'STATUS', 'RANK', 'TIENDA', 'MET_ENTREGA', 'DIAS_ENTREGA',
-        'COSTO_FIJO', 'INVENTARIO_OH', 'CAPACIDAD_STORE', 'CAPACIDAD_ME',
-        'SCORE', 'ZONA_ROJA', 'EXCL_PROD', 'SKU_CVE', 'CP'
-    ]
+        # PASO 1: Intentar match EXACTO por ID_TRAZO (prioritario)
+        if id_trazo_col and id_trazo_col in row:
+            id_trazo_bq = str(row[id_trazo_col]).strip()
 
-    # Solo incluir columnas que existen
-    available_columns = [col for col in column_order if col in df_enriched.columns]
-    df_enriched = df_enriched[available_columns]
+            for alt in alternativas:
+                api_id = str(alt.get('id', '')).strip()
 
-    # Ordenar: seleccionados primero, luego por rank, luego por días
-    df_enriched = df_enriched.sort_values([
-        'SELECCIONADO',
-        'RANK',
-        'DIAS_ENTREGA',
-        'COSTO_FIJO'
-    ], ascending=[False, True, True, True], na_position='last')
+                if id_trazo_bq == api_id and api_id != '':  # Match exacto y no vacío
+                    if alt.get('selected', False):
+                        df_result.at[idx, 'STATUS_ML'] = 'GANADOR'
+                        print(f"DEBUG - GANADOR por ID_TRAZO: {id_trazo_bq}")
+                    else:
+                        df_result.at[idx, 'STATUS_ML'] = 'ALTERNATIVA'
+                        print(f"DEBUG - ALTERNATIVA por ID_TRAZO: {id_trazo_bq}")
+                    match_found = True
+                    break
 
-    return df_enriched
+        # PASO 2: Solo si NO hubo match por ID_TRAZO, intentar por TIENDA
+        if not match_found and tienda_col and tienda_col in row:
+            tienda_bq = row[tienda_col]
+
+            for alt in alternativas:
+                api_tienda = alt.get('tienda', 0)
+
+                if tienda_bq == api_tienda and api_tienda != 0:  # Match por tienda
+                    # PERO solo si el ID_TRAZO de BigQuery NO aparece en ninguna alternativa
+                    # (para evitar duplicados cuando ya hay match exacto)
+                    id_trazo_bq = str(row.get(id_trazo_col, '')).strip() if id_trazo_col else ''
+                    id_ya_matcheado = any(
+                        str(a.get('id', '')).strip() == id_trazo_bq
+                        for a in alternativas
+                        if id_trazo_bq != ''
+                    )
+
+                    if not id_ya_matcheado:  # Solo marcar si el ID no está en alternativas
+                        if alt.get('selected', False):
+                            df_result.at[idx, 'STATUS_ML'] = 'GANADOR'
+                            print(f"DEBUG - GANADOR por TIENDA: {tienda_bq}")
+                        else:
+                            df_result.at[idx, 'STATUS_ML'] = 'ALTERNATIVA'
+                            print(f"DEBUG - ALTERNATIVA por TIENDA: {tienda_bq}")
+                        break
+
+    # Contar resultados para debug
+    ganadores = len(df_result[df_result['STATUS_ML'] == 'GANADOR'])
+    alternativas_count = len(df_result[df_result['STATUS_ML'] == 'ALTERNATIVA'])
+    sin_match = len(df_result[df_result['STATUS_ML'] == 'SIN_MATCH'])
+
+    print(
+        f"DEBUG - Resultados finales: {ganadores} ganadores, {alternativas_count} alternativas, {sin_match} sin match")
+
+    # Ordenar: ganadores primero, luego alternativas, luego otros
+    orden_status = {'GANADOR': 1, 'ALTERNATIVA': 2, 'SIN_MATCH': 3}
+    df_result['_orden'] = df_result['STATUS_ML'].map(orden_status)
+    df_result = df_result.sort_values('_orden', na_position='last')
+    df_result = df_result.drop('_orden', axis=1)
+
+    return df_result

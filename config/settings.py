@@ -33,7 +33,7 @@ class Config:
     TEMPORADAS = ["TEMPORADA_ALTA", "TEMPORADA_BAJA"]
 
     # === BigQuery Configuration ===
-    SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT", "").replace("\r", "")
-    PROJECT_ID = os.getenv("PROJECT_ID", "").replace("\r", "")
-    DATASET_ID = os.getenv("DATASET_ID", "").replace("\r", "")
-    TABLE_ID = os.getenv("TABLE_ID", "").replace("\r", "")
+    SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT", "chatbot.json").replace("\r", "")
+    PROJECT_ID = os.getenv("PROJECT_ID", "liv-dev-dig-chatbot").replace("\r", "")
+    DATASET_ID = os.getenv("DATASET_ID", "Fecha_Estimada_Entrega").replace("\r", "")
+    TABLE_ID = os.getenv("TABLE_ID", "TB_FEE_RESULTADO_CON_TIEMPO3_UUID").replace("\r", "")
