@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from streamlit_calendar import calendar
+
+from components.recalculate import render_recalculo_comparison, render_recalculate_section
 from utils.helpers import format_currency, format_datetime
 from services.bigquery_service import get_bigquery_client, execute_bigquery_query, compare_bigquery_with_results
 
@@ -10,6 +12,29 @@ def render_results_page():
     """Página de resultados minimalista y elegante"""
     data = st.session_state.prediction_data
     original_request = st.session_state.get('original_request', {})
+
+    # Validación de caso recalculo
+
+    es_recalculo = data.get('es_recalculo', False)
+
+    if es_recalculo:
+        # Caso Recalculo
+        render_recalculo_comparison(data)
+        render_main_results(data, original_request)
+        render_recalculate_section(data, original_request)
+
+
+    else:
+        # Caso base
+        render_main_results(data, original_request)
+        render_recalculate_section(data, original_request)
+
+        # render_recalculate_section(data, original_request)
+
+def render_main_results(data: dict, original_request: dict):
+    """
+    Desplegamos los resultados generales para el cálculo de una EDD
+    """
 
     # Header de resultados
     render_results_header()
