@@ -7,7 +7,7 @@ sys.path.append(str(current_dir))
 
 from components.layout import setup_page_config, load_custom_css
 from components.forms import render_prediction_form
-from components.charts import render_results_dashboard
+from components.results import render_results_page
 from utils.helpers import init_session_state
 
 
@@ -16,8 +16,9 @@ def main():
     setup_page_config()
     load_custom_css()
     init_session_state()
+
     if st.session_state.show_results and st.session_state.prediction_data:
-        render_results_dashboard()
+        render_results_page()
     else:
         render_prediction_form()
 

@@ -1,10 +1,11 @@
 import requests
-import streamlit as st
+
 from config.settings import Config
-from google.cloud import bigquery
 
 
 class APIClient:
+    """Cliente para interactuar con la API de predicción de entregas"""
+
     def __init__(self):
         self.base_url = Config.API_BASE_URL
         self.timeout = Config.API_TIMEOUT
@@ -12,6 +13,16 @@ class APIClient:
     def predict_delivery(self, codigo_postal: str, sku_id: str, cantidad: int, temporada: str, fecha_compra: str):
         """
         Realizar predicción de entrega
+
+        Args:
+            codigo_postal (str): Código postal de destino
+            sku_id (str): ID del SKU
+            cantidad (int): Cantidad de productos
+            temporada (str): Temporada comercial
+            fecha_compra (str): Fecha de compra en formato ISO
+
+        Returns:
+            tuple: (result_data, error_message)
         """
         url = f"{self.base_url}{Config.API_PREDICT_ENDPOINT}"
         payload = {
@@ -23,14 +34,13 @@ class APIClient:
         }
 
         try:
-            with st.spinner("🔮 Procesando predicción..."):
-                response = requests.post(url, json=payload, timeout=self.timeout)
+            response = requests.post(url, json=payload, timeout=self.timeout)
 
-                if response.status_code == 200:
-                    return response.json(), None
-                else:
-                    error_msg = f"Error {response.status_code}: {response.text}"
-                    return None, error_msg
+            if response.status_code == 200:
+                return response.json(), None
+            else:
+                error_msg = f"Error {response.status_code}: {response.text}"
+                return None, error_msg
 
         except requests.exceptions.Timeout:
             return None, "⏰ Tiempo de espera agotado. El servidor tardó demasiado en responder."
@@ -41,13 +51,27 @@ class APIClient:
         except Exception as e:
             return None, f"❌ Error inesperado: {str(e)}"
 
-
     def recalculate_delivery(self, codigo_postal: str, sku_id: str, cantidad: int,
                              fecha_compra_original: str, fecha_entrega_promesa: str,
                              tienda_rechazada: int, temporada: str, rutas_rechazadas: list,
-                             priorizar_fecha_promesa: bool):
+                             priorizar_fecha_promesa: bool, permitir_split: bool = True):
         """
-        Realizar el recálculo de entrega cuando una tienda es rechazada
+        Realizar recálculo de entrega cuando una tienda es rechazada
+
+        Args:
+            codigo_postal (str): Código postal de destino
+            sku_id (str): ID del SKU
+            cantidad (int): Cantidad de productos
+            fecha_compra_original (str): Fecha de compra original
+            fecha_entrega_promesa (str): Fecha promesa de entrega original
+            tienda_rechazada (int): ID de tienda rechazada
+            temporada (str): Temporada comercial
+            rutas_rechazadas (list): Lista de rutas rechazadas
+            priorizar_fecha_promesa (bool): Priorizar mantener fecha promesa
+            permitir_split (bool): Permitir división en múltiples tiendas
+
+        Returns:
+            tuple: (result_data, error_message)
         """
         url = f"{self.base_url}{Config.API_RECALCULATE_ENDPOINT}"
         payload = {
@@ -59,18 +83,18 @@ class APIClient:
             "tienda_rechazada": tienda_rechazada,
             "temporada": temporada,
             "rutas_rechazadas": rutas_rechazadas,
-            "priorizar_fecha_promesa": priorizar_fecha_promesa
+            "priorizar_fecha_promesa": priorizar_fecha_promesa,
+            "permitir_split": permitir_split
         }
 
         try:
-            with st.spinner("🔮 Realizando el recalculo para la Fecha promesa de entrega..."):
-                response = requests.post(url, json=payload, timeout=self.timeout)
+            response = requests.post(url, json=payload, timeout=self.timeout)
 
-                if response.status_code == 200:
-                    return response.json(), None
-                else:
-                    error_msg = f"Error {response.status_code}: {response.text}"
-                    return None, error_msg
+            if response.status_code == 200:
+                return response.json(), None
+            else:
+                error_msg = f"Error {response.status_code}: {response.text}"
+                return None, error_msg
 
         except requests.exceptions.Timeout:
             return None, "⏰ Tiempo de espera agotado. El servidor tardó demasiado en responder."
