@@ -1,11 +1,12 @@
-import streamlit as st
-import pandas as pd
 from datetime import datetime
+
+import pandas as pd
+import streamlit as st
 from streamlit_calendar import calendar
 
-from components.recalculate import render_recalculo_comparison, render_recalculate_forms
-from utils.helpers import format_currency, format_datetime
+from components.recalculate import render_recalculate_forms
 from services.bigquery_service import get_bigquery_client, execute_bigquery_query, compare_bigquery_with_results
+from utils.helpers import format_currency, format_datetime
 
 
 def render_results_page():
@@ -147,16 +148,32 @@ def render_delivery_promise_card(data: dict, original_request: dict):
     recalculo_html = ""
     if data.get('es_recalculo', False):
         tienda_rechazada = data.get('tienda_rechazada', 'N/A')
-        es_split_recalculo = data.get('es_split', False)  # Usar una variable distinta para evitar conflictos
+        es_split_recalculo = data.get('es_split', False)
         if es_split_recalculo:
-            tienda_rechazada = st.session_state.tienda_rechazada
+            tienda_rechazada = st.session_state.get('tienda_rechazada', tienda_rechazada)
 
         dias_diff = data.get('dias_diferencia', 'N/A')
         fecha_promesa_mantenida = data.get('fecha_promesa_mantenida', False)
         status_promesa = "✅ Mantenida" if fecha_promesa_mantenida else "❌ No mantenida"
         costo_diff = data.get('costo_diferencia', 0)
+
+        # Manejo robusto de rutas descartadas
         rutas_descartadas = data.get('rutas_descartadas', [])
-        rutas_text = ', '.join(rutas_descartadas) if rutas_descartadas else 'Ninguna'
+        if isinstance(rutas_descartadas, list) and rutas_descartadas:
+            rutas_text = ', '.join([str(ruta) for ruta in rutas_descartadas if ruta])
+            if not rutas_text:  # Si después del filtro no queda nada
+                rutas_text = 'Ninguna'
+        else:
+            rutas_text = 'Ninguna'
+
+        # Obtener tipo de impacto si está disponible
+        tipo_impacto = data.get('tipo_impacto', 'N/A')
+        impacto_colors = {
+            "BAJA": "🟢",
+            "MEDIANA": "🟡",
+            "ALTA": "🔴"
+        }
+        tipo_impacto_display = f"{impacto_colors.get(tipo_impacto, '⚪')} {tipo_impacto}"
 
         recalculo_html = f"""
             <div style="
@@ -167,7 +184,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                 <h4 style="text-align: center; color: #374151; font-weight: 600; margin-bottom: 1.5rem;">
                     🔄 Resultados del Recálculo
                 </h4>
-                <div style="display: flex; justify-content: space-around; text-align: center; gap: 1rem;">
+                <div style="display: flex; justify-content: space-around; text-align: center; gap: 1rem; margin-bottom: 1.5rem;">
                     <div style="flex: 1;">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
                             📅 Fecha Original
@@ -196,10 +213,9 @@ def render_delivery_promise_card(data: dict, original_request: dict):
 
                 <div style="
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 1.5rem;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 1rem;
                     text-align: center;
-                    margin-top: 1.5rem;
                 ">
                     <div style="
                         background-color: #f1f5f9;
@@ -223,6 +239,18 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         </div>
                         <div style="color: #374151; font-size: 1rem; font-weight: 600;">
                             {format_currency(costo_diff)}
+                        </div>
+                    </div>
+                    <div style="
+                        background-color: #f1f5f9;
+                        border-radius: 8px;
+                        padding: 1rem;
+                    ">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
+                            Tipo de Impacto
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                            {tipo_impacto_display}
                         </div>
                     </div>
                     <div style="
@@ -545,6 +573,7 @@ def render_external_factors_table(data: dict):
         else:
             st.info("No se detectaron factores externos especiales")
 
+
 @st.cache_data(show_spinner=False)
 def render_bigquery_analysis(data: dict, original_request: dict):
     """Análisis simplificado: BigQuery con datos pintados según algoritmo"""
@@ -572,24 +601,42 @@ def render_bigquery_analysis(data: dict, original_request: dict):
     total_registros = len(df_with_status)
     ganadores = len(df_with_status[df_with_status['STATUS_ML'] == 'GANADOR'])
     alternativas = len(df_with_status[df_with_status['STATUS_ML'] == 'ALTERNATIVA'])
+    descartadas = len(df_with_status[df_with_status['STATUS_ML'] == 'DESCARTADA'])
     sin_match = len(df_with_status[df_with_status['STATUS_ML'] == 'SIN_MATCH'])
 
-    # Resumen en una línea
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("📊 Total Registros", total_registros)
-    with col2:
-        st.metric("🟢 Ganadores", ganadores)
-    with col3:
-        st.metric("🟡 Alternativas", alternativas)
-    with col4:
-        st.metric("⚪ Sin Match", sin_match)
+    # Verificar si es recálculo para mostrar métricas apropiadas
+    es_recalculo = data.get('es_recalculo', False)
+
+    if es_recalculo:
+        # Mostrar 5 columnas cuando hay recálculo
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("📊 Total Registros", total_registros)
+        with col2:
+            st.metric("🟢 Ganadores", ganadores)
+        with col3:
+            st.metric("🟡 Alternativas", alternativas)
+        with col4:
+            st.metric("🔴 Descartadas", descartadas)
+        with col5:
+            st.metric("⚪ Sin Match", sin_match)
+    else:
+        # Mostrar 4 columnas cuando no hay recálculo
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📊 Total Registros", total_registros)
+        with col2:
+            st.metric("🟢 Ganadores", ganadores)
+        with col3:
+            st.metric("🟡 Alternativas", alternativas)
+        with col4:
+            st.metric("⚪ Sin Match", sin_match)
 
     # Tabla principal con colores
-    render_bigquery_table_with_colors(df_with_status)
+    render_bigquery_table_with_colors(df_with_status, es_recalculo)
 
 
-def render_bigquery_table_with_colors(df_with_status: pd.DataFrame):
+def render_bigquery_table_with_colors(df_with_status: pd.DataFrame, es_recalculo: bool = False):
     """Renderizar tabla de BigQuery con colores según status ML usando columnas reales"""
 
     # Verificar que tengamos datos
@@ -607,9 +654,8 @@ def render_bigquery_table_with_colors(df_with_status: pd.DataFrame):
             return ['background-color: #dcfce7; color: #166534; font-weight: bold'] * len(row)  # Verde
         elif status == 'ALTERNATIVA':
             return ['background-color: #fef3c7; color: #92400e'] * len(row)  # Amarillo
-        elif status == 'RECHAZADA':
-            return ['background-color: #ff0000; color: #ee4b2b'] * len(row)
-
+        elif status == 'DESCARTADA':
+            return ['background-color: #fecaca; color: #dc2626; font-weight: bold'] * len(row)  # Rojo
         else:
             return ['background-color: #f9fafb; color: #374151'] * len(row)  # Gris claro
 
@@ -629,6 +675,8 @@ def render_bigquery_table_with_colors(df_with_status: pd.DataFrame):
             status_display.append('🟢 GANADOR')
         elif status == 'ALTERNATIVA':
             status_display.append('🟡 ALTERNATIVA')
+        elif status == 'DESCARTADA':
+            status_display.append('🔴 DESCARTADA')
         else:
             status_display.append('⚪ SIN MATCH')
 
@@ -702,8 +750,15 @@ def render_bigquery_table_with_colors(df_with_status: pd.DataFrame):
         df_simple = df_display[cols_to_show]
         st.dataframe(df_simple, use_container_width=True, hide_index=True)
 
-    # Leyenda
-    st.html("""
+    # Leyenda - incluir descartadas solo si es recálculo
+    leyenda_descartadas = """
+        <span style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="width: 16px; height: 16px; background: #fecaca; border: 1px solid #dc2626; border-radius: 3px;"></div>
+            <strong>🔴 DESCARTADA:</strong> Ruta descartada en recálculo
+        </span>
+    """ if es_recalculo else ""
+
+    st.html(f"""
         <div style="margin-top: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
             <div style="display: flex; gap: 2rem; align-items: center; justify-content: center; flex-wrap: wrap;">
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
@@ -714,6 +769,7 @@ def render_bigquery_table_with_colors(df_with_status: pd.DataFrame):
                     <div style="width: 16px; height: 16px; background: #fef3c7; border: 1px solid #d97706; border-radius: 3px;"></div>
                     <strong>🟡 ALTERNATIVA:</strong> Evaluado pero no seleccionado
                 </span>
+                {leyenda_descartadas}
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                     <div style="width: 16px; height: 16px; background: #f9fafb; border: 1px solid #6b7280; border-radius: 3px;"></div>
                     <strong>⚪ SIN MATCH:</strong> No evaluado por el algoritmo
