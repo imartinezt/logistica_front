@@ -52,7 +52,7 @@ class APIClient:
 
     def recalculate_delivery(self, codigo_postal: str, sku_id: str, cantidad: int,
                              fecha_compra_original: str, fecha_entrega_promesa: str,
-                             tienda_rechazada: int, tipo_impacto: str, permitir_split: bool = True):
+                             tienda_rechazada: int, tipo_impacto: str, temporada_original: str, permitir_split: bool = True):
         """
         Realizar recálculo de entrega cuando una tienda es rechazada
 
@@ -66,6 +66,7 @@ class APIClient:
             fecha_entrega_promesa (str): Fecha promesa de entrega original
             tienda_rechazada (int): ID de tienda rechazada
             tipo_impacto (str): Tipo de impacto ("BAJA", "MEDIANA", "ALTA")
+            temporada_original (str): Temporada original (BAJA, ALTA)
             permitir_split (bool): Permitir división en múltiples tiendas
 
         Returns:
@@ -80,6 +81,7 @@ class APIClient:
             "fecha_entrega_promesa": fecha_entrega_promesa,
             "tienda_rechazada": tienda_rechazada,
             "tipo_impacto": tipo_impacto,
+            "temporada_original": temporada_original,
             "permitir_split": permitir_split
         }
 

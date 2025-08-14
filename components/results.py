@@ -21,7 +21,7 @@ def render_results_page():
 
     # --- Lógica para mostrar/ocultar el formulario del recalculo ---
     if not st.session_state.show_recalculate_form:
-        if st.button("🔄 Iniciar Recálculo", use_container_width=True):
+        if st.button("🔄 Activar Recálculo", use_container_width=True):
             st.session_state.show_recalculate_form = True
 
     if st.session_state.show_recalculate_form:
