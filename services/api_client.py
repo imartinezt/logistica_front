@@ -68,8 +68,6 @@ class APIClient:
             temporada (str): Temporada comercial
             rutas_rechazadas (list): Lista de rutas rechazadas
             priorizar_fecha_promesa (bool): Priorizar mantener fecha promesa
-            permitir_split (bool): Permitir división en múltiples tiendas
-
         Returns:
             tuple: (result_data, error_message)
         """
@@ -83,9 +81,7 @@ class APIClient:
             "tienda_rechazada": tienda_rechazada,
             "temporada": temporada,
             "rutas_rechazadas": rutas_rechazadas,
-            "priorizar_fecha_promesa": priorizar_fecha_promesa,
-            "permitir_split": permitir_split
-        }
+            "priorizar_fecha_promesa": priorizar_fecha_promesa,        }
 
         try:
             response = requests.post(url, json=payload, timeout=self.timeout)

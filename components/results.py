@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 from streamlit_calendar import calendar
 
-from components.recalculate import render_recalculo_comparison, render_recalculate_section
+from components.recalculate import render_recalculo_comparison, render_recalculate_forms
 from utils.helpers import format_currency, format_datetime
 from services.bigquery_service import get_bigquery_client, execute_bigquery_query, compare_bigquery_with_results
 
@@ -13,20 +13,18 @@ def render_results_page():
     data = st.session_state.prediction_data
     original_request = st.session_state.get('original_request', {})
 
-    # Validación de caso recalculo
-    es_recalculo = data.get('es_recalculo', False)
+    if 'show_recalculate_form' not in st.session_state:
+        st.session_state.show_recalculate_form = False
 
-    if es_recalculo:
-        # Caso Recalculo
-        render_recalculo_comparison(data)
-        render_main_results(data, original_request)
-        render_recalculate_section(data, original_request)
+    render_main_results(data, original_request)
 
+    # --- Lógica para mostrar/ocultar el formulario del recalculo ---
+    if not st.session_state.show_recalculate_form:
+        if st.button("🔄 Iniciar Recálculo", use_container_width=True):
+            st.session_state.show_recalculate_form = True
 
-    else:
-        # Caso base
-        render_main_results(data, original_request)
-        render_recalculate_section(data, original_request)
+    if st.session_state.show_recalculate_form:
+        render_recalculate_forms(data, original_request)
 
 
 def render_main_results(data: dict, original_request: dict):
@@ -99,9 +97,8 @@ def render_back_button():
 
 
 def render_delivery_promise_card(data: dict, original_request: dict):
-    """Cuadro principal con la información de entrega unificada"""
-
-    # Título principal
+    """Cuadro principal con la información de entrega unificada, incluyendo
+    los resultados del recálculo si están disponibles."""
     st.html("""
         <div style="text-align: center; margin: 2rem 0;">
             <h2 style="color: #2563eb; font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem;">
@@ -110,7 +107,6 @@ def render_delivery_promise_card(data: dict, original_request: dict):
         </div>
     """)
 
-    # Fecha de entrega destacada
     fecha_entrega = data.get('fecha_entrega', '')
     st.html(f"""
         <div style="
@@ -129,7 +125,6 @@ def render_delivery_promise_card(data: dict, original_request: dict):
         </div>
     """)
 
-    # Extraer todos los datos necesarios
     fecha_compra = original_request.get('fecha_compra', '')
     codigo_postal = original_request.get('codigo_postal', '')
     dias_entrega = calculate_days_to_delivery(fecha_compra, fecha_entrega)
@@ -142,14 +137,123 @@ def render_delivery_promise_card(data: dict, original_request: dict):
     tiempo_proceso = data.get('tiempo_proceso_ms', 0)
     tipo_display = f"{tipo_entrega.get('icono', '')} {tipo_entrega.get('nombre', 'N/A')}"
 
-    # Información adicional para splits
     split_info = ""
     if data.get('es_split', False):
         split_data = data.get('split_info', {})
         rutas_count = split_data.get('rutas_seleccionadas', 0)
         split_info = f"📦 SPLIT ({rutas_count} rutas)"
 
-    # Cuadro unificado estilo "fechas importantes"
+    # Caso recalculo
+    recalculo_html = ""
+    if data.get('es_recalculo', False):
+        tienda_rechazada = data.get('tienda_rechazada', 'N/A')
+        es_split_recalculo = data.get('es_split', False)  # Usar una variable distinta para evitar conflictos
+        if es_split_recalculo:
+            tienda_rechazada = st.session_state.tienda_rechazada
+
+        dias_diff = data.get('dias_diferencia', 'N/A')
+        fecha_promesa_mantenida = data.get('fecha_promesa_mantenida', False)
+        status_promesa = "✅ Mantenida" if fecha_promesa_mantenida else "❌ No mantenida"
+        costo_diff = data.get('costo_diferencia', 0)
+        rutas_descartadas = data.get('rutas_descartadas', [])
+        rutas_text = ', '.join(rutas_descartadas) if rutas_descartadas else 'Ninguna'
+
+        recalculo_html = f"""
+            <div style="
+                border-top: 1px solid #e5e7eb;
+                padding-top: 2rem;
+                margin-top: 2rem;
+            ">
+                <h4 style="text-align: center; color: #374151; font-weight: 600; margin-bottom: 1.5rem;">
+                    🔄 Resultados del Recálculo
+                </h4>
+                <div style="display: flex; justify-content: space-around; text-align: center; gap: 1rem;">
+                    <div style="flex: 1;">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                            📅 Fecha Original
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                            {format_datetime(data.get('fecha_entrega_original', 'N/A'))}
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                            🎯 Fecha Recálculo
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                            {format_datetime(data.get('fecha_entrega', 'N/A'))}
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
+                            📊 Diferencia
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                            {dias_diff} días
+                        </div>
+                    </div>
+                </div>
+
+                <div style="
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 1.5rem;
+                    text-align: center;
+                    margin-top: 1.5rem;
+                ">
+                    <div style="
+                        background-color: #f1f5f9;
+                        border-radius: 8px;
+                        padding: 1rem;
+                    ">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
+                            Fecha Promesa
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                            {status_promesa}
+                        </div>
+                    </div>
+                    <div style="
+                        background-color: #f1f5f9;
+                        border-radius: 8px;
+                        padding: 1rem;
+                    ">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
+                            Diferencia de Costo
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                            {format_currency(costo_diff)}
+                        </div>
+                    </div>
+                    <div style="
+                        background-color: #f1f5f9;
+                        border-radius: 8px;
+                        padding: 1rem;
+                    ">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
+                            Tienda(s) Rechazada(s)
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                            {tienda_rechazada}
+                        </div>
+                    </div>
+                    <div style="
+                        background-color: #f1f5f9;
+                        border-radius: 8px;
+                        padding: 1rem;
+                    ">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
+                            Rutas Descartadas
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600; word-break: break-all;">
+                            {rutas_text}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        """
+
+    # --- Bloque html completo
     st.html(f"""
         <div style="
             background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -267,6 +371,8 @@ def render_delivery_promise_card(data: dict, original_request: dict):
 
                 {f'<div><div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">📦 TIPO</div><div style="color: #f59e0b; font-size: 1rem; font-weight: 600;">{split_info}</div></div>' if split_info else ''}
             </div>
+
+            {recalculo_html}
         </div>
     """)
 
@@ -439,7 +545,7 @@ def render_external_factors_table(data: dict):
         else:
             st.info("No se detectaron factores externos especiales")
 
-
+@st.cache_data(show_spinner=False)
 def render_bigquery_analysis(data: dict, original_request: dict):
     """Análisis simplificado: BigQuery con datos pintados según algoritmo"""
     st.markdown("---")
