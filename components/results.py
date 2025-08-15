@@ -157,17 +157,23 @@ def render_delivery_promise_card(data: dict, original_request: dict):
         status_promesa = "✅ Mantenida" if fecha_promesa_mantenida else "❌ No mantenida"
         costo_diff = data.get('costo_diferencia', 0)
 
-        # Manejo robusto de rutas descartadas
-        rutas_descartadas = data.get('rutas_descartadas', [])
-        if isinstance(rutas_descartadas, list) and rutas_descartadas:
-            rutas_text = ', '.join([str(ruta) for ruta in rutas_descartadas if ruta])
-            if not rutas_text:  # Si después del filtro no queda nada
-                rutas_text = 'Ninguna'
+
+        # Nueva lógica para obtener las rutas descartadas directamente de la consulta a BigQuery
+        df_bigquery = get_bigquery_results(original_request)
+
+        rutas_descartadas_list = []
+        if not df_bigquery.empty and tienda_rechazada != 'N/A':
+            rutas_descartadas_list = get_rejected_routes(df_bigquery, tienda_rechazada)
+            rutas_descartadas_formated = get_rejected_routes_display(rutas_descartadas_list)
+
+        # Manejo robusto de rutas descartadas para mostrar
+        if rutas_descartadas_formated:
+            rutas_text = ', '.join([str(ruta) for ruta in rutas_descartadas_formated])
         else:
             rutas_text = 'Ninguna'
 
         # Obtener tipo de impacto si está disponible
-        tipo_impacto = data.get('tipo_impacto', 'N/A')
+        tipo_impacto = data.get('tipo_impacto_aplicado', 'N/A')
         impacto_colors = {
             "BAJA": "🟢",
             "MEDIANA": "🟡",
@@ -223,7 +229,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         padding: 1rem;
                     ">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
-                            Fecha Promesa
+                            ⌛ Fecha Promesa
                         </div>
                         <div style="color: #374151; font-size: 1rem; font-weight: 600;">
                             {status_promesa}
@@ -235,7 +241,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         padding: 1rem;
                     ">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
-                            Diferencia de Costo
+                            💰 Diferencia de Costo
                         </div>
                         <div style="color: #374151; font-size: 1rem; font-weight: 600;">
                             {format_currency(costo_diff)}
@@ -259,7 +265,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         padding: 1rem;
                     ">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
-                            Tienda(s) Rechazada(s)
+                            🏪 Tienda Rechazada
                         </div>
                         <div style="color: #374151; font-size: 1rem; font-weight: 600;">
                             {tienda_rechazada}
@@ -271,7 +277,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         padding: 1rem;
                     ">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
-                            Rutas Descartadas
+                            🛣️ Rutas Descartadas
                         </div>
                         <div style="color: #374151; font-size: 1rem; font-weight: 600; word-break: break-all;">
                             {rutas_text}
@@ -575,20 +581,24 @@ def render_external_factors_table(data: dict):
 
 
 @st.cache_data(show_spinner=False)
+def get_bigquery_results(original_request: dict):
+    """
+    Ejecuta una consulta en bigquery y la almacena en cache
+    """
+    bq_client = get_bigquery_client()
+    if not bq_client:
+        st.warning("⚠️ BigQuery no está configurado.")
+        return None
+
+    return execute_bigquery_query(bq_client, original_request)
+
+
 def render_bigquery_analysis(data: dict, original_request: dict):
     """Análisis simplificado: BigQuery con datos pintados según algoritmo"""
     st.markdown("---")
     st.markdown("### 📊 Análisis de Datos: Algoritmo ML")
 
-    # Obtener cliente y datos de BigQuery
-    bq_client = get_bigquery_client()
-
-    if not bq_client:
-        st.warning("⚠️ BigQuery no está configurado.")
-        return
-
-    # Ejecutar consulta
-    df_bigquery = execute_bigquery_query(bq_client, original_request)
+    df_bigquery = get_bigquery_results(original_request)
 
     if df_bigquery.empty:
         st.warning("⚠️ No se encontraron datos en BigQuery para este CP + SKU")
@@ -779,6 +789,32 @@ def render_bigquery_table_with_colors(df_with_status: pd.DataFrame, es_recalculo
     """)
 
 
+def get_rejected_routes(df_bigquery: pd.DataFrame, rejected_store_id: str) -> list:
+    """
+    Obtiene todas las rutas asociadas a una tienda rechazada del DataFrame de BigQuery.
+
+    Args:
+        df_bigquery (pd.DataFrame): El DataFrame completo con los resultados de BigQuery.
+        rejected_store_id (str): El ID de la tienda que fue rechazada.
+
+    Returns:
+        list: Una lista de IDs de rutas asociadas a la tienda rechazada.
+    """
+
+    if 'TDA_CVE' in df_bigquery.columns and 'ID_TRAZO' in df_bigquery.columns:
+        # Filtra el DataFrame para obtener solo las filas de la tienda rechazada
+        rejected_routes_df = df_bigquery[df_bigquery['TDA_CVE'] == rejected_store_id]
+
+        # Extrae los IDs de las rutas y elimina duplicados
+        rejected_routes = rejected_routes_df['ID_TRAZO'].unique().tolist()
+
+        return rejected_routes
+
+    else:
+        st.warning("⚠️ El DataFrame no contiene las columnas necesarias ('ID_TIENDA' o 'ID_TRAZO').")
+        return []
+
+
 # Funciones auxiliares
 def calculate_days_to_delivery(fecha_compra_str: str, fecha_entrega_str: str) -> str:
     """Calcular días hasta entrega"""
@@ -822,3 +858,15 @@ def get_routes_display(data: dict) -> str:
         trazo_id = data.get('id_trazo', 'N/A')
         # Mostrar solo los primeros 8 caracteres del ID para mejor legibilidad
         return trazo_id[:8] + "..." if len(trazo_id) > 8 else trazo_id
+
+def get_rejected_routes_display(routes: list):
+    """
+    Formatear cada elemento de la lista de rutas rechazadas.
+    """
+    formated_routes = []
+
+    for route in routes:
+
+        formated_routes.append(route[:8] + "..." if len(route) > 8 else route)
+
+    return formated_routes

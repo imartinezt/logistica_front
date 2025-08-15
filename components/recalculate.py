@@ -202,6 +202,7 @@ def execute_recalculation(request_data: dict):
 
                 # Guardar resultado en session state
                 st.session_state.prediction_data = result
+                print(result)
                 st.session_state.show_results = True
                 st.rerun()
             else:
