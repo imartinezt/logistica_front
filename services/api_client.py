@@ -38,7 +38,8 @@ class APIClient:
             if response.status_code == 200:
                 return response.json(), None
             else:
-                error_msg = f"Error {response.status_code}: {response.text}"
+                # error_msg = f"Error {response.status_code}: {response.text}"
+                error_msg = response.json()
                 return None, error_msg
 
         except requests.exceptions.Timeout:

@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime
 from config.settings import Config
 from services.api_client import APIClient
+from components.results import render_error_card
 
 
 def render_prediction_form():
@@ -100,7 +101,7 @@ def process_prediction(codigo_postal: str, sku_id: str, cantidad: int, temporada
 
         with st.status("🔄 Procesando predicción...", expanded=True) as status:
             st.write("📡 Enviando solicitud al servidor...")
-            st.write(f"📍 CP: {codigo_postal} | 📦 SKU: {sku_id} | 🔢 Qty: {cantidad}")
+            st.write(f"📍 CP: {codigo_postal} | 📦 SKU: {sku_id} | 🔢 Qty: {cantidad} | ⚡ Temporada: {temporada}")
 
             api_client = APIClient()
             result, error = api_client.predict_delivery(
@@ -122,9 +123,8 @@ def process_prediction(codigo_postal: str, sku_id: str, cantidad: int, temporada
                 st.session_state.show_results = True
                 st.rerun()
             else:
-                st.write("❌ Error en el procesamiento")
-                status.update(label="❌ Error", state="error", expanded=False)
-                st.error(f"🚫 {error}")
+                status.update(label="❌ Ocurrió un error, por favor revisa los detalles.", state="error", expanded=False) # Mensaje de error por defecto
+                render_error_card(data_error=error)
 
     except Exception as e:
         st.error(f"❌ Error inesperado: {str(e)}")

@@ -11,6 +11,8 @@ def init_session_state():
         st.session_state.prediction_data = None
     if 'original_request' not in st.session_state:
         st.session_state.original_request = {}
+    if 'costo_original' not in st.session_state:
+        st.session_state.costo_original = None
 
 
 def format_currency(amount: float) -> str:

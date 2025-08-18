@@ -12,6 +12,7 @@ def render_recalculate_forms(data: dict, original_request: dict):
     # Extracción de valores iniciales del request original
     fecha_entrega_promesa_init = data.get('fecha_entrega', '')
     tienda_rechazada_init = data.get('tienda', 0)
+
     codigo_postal_init = original_request.get('codigo_postal', '')
     sku_id_init = original_request.get('sku_id', '')
     cantidad_init = original_request.get('cantidad', 1)
@@ -138,7 +139,7 @@ def render_recalculate_forms(data: dict, original_request: dict):
                 "tienda_rechazada": tienda_rechazada_rq,
                 "tipo_impacto": tipo_impacto_text,
                 "temporada_original": temporada_original,
-                "permitir_split": permitir_split,
+                "permitir_split": permitir_split
             }
             st.json(request_preview)
 
@@ -165,13 +166,13 @@ def render_recalculate_forms(data: dict, original_request: dict):
                 "tienda_rechazada": tienda_rechazada_rq,
                 "tipo_impacto": tipo_impacto_text,
                 "temporada_original": temporada_original,
-                "permitir_split": permitir_split
+                "permitir_split": permitir_split,
             }
 
-            execute_recalculation(request_data)
+            execute_recalculation(request_data, data)
 
 
-def execute_recalculation(request_data: dict):
+def execute_recalculation(request_data: dict, data: dict):
     """Ejecutar recálculo con los datos recibidos del formulario."""
     try:
         # Extraer valores para logging
@@ -180,6 +181,11 @@ def execute_recalculation(request_data: dict):
         cantidad = request_data.get('cantidad')
         tienda_rechazada = request_data.get('tienda_rechazada')
         tipo_impacto = request_data.get('tipo_impacto')
+
+        costo_original = data.get('costo', 0)
+        # Hard-codeando costo original
+        st.session_state.costo_original = costo_original
+
 
         if not codigo_postal or not sku_id:
             st.error("❌ Faltan datos requeridos para el recálculo")
@@ -202,14 +208,13 @@ def execute_recalculation(request_data: dict):
 
                 # Guardar resultado en session state
                 st.session_state.prediction_data = result
-                print(result)
                 st.session_state.show_results = True
                 st.rerun()
             else:
-                st.write("❌ Error en el recálculo")
+                st.write("❌ Error en el recálculo") # TODO: Mapear correctamente el error (inventario insuficiente, etc.)
                 status.update(label="❌ Error en Recálculo", state="error", expanded=False)
 
-                with result_placeholder.container():
+                with result_placeholder.containe():
                     st.error(f"🚫 **Error en el recálculo:** {error}")
 
                     with st.expander("🔍 Detalles del Error", expanded=False):

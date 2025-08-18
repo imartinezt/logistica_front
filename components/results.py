@@ -134,7 +134,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
     tiendas_display = get_stores_display(data)
     rutas_display = get_routes_display(data)
     score = f"{data.get('score', 0):.3f}"
-    costo = format_currency(data.get('costo', 0))
+    costo = data.get('costo', 0)
     tiempo_proceso = data.get('tiempo_proceso_ms', 0)
     tipo_display = f"{tipo_entrega.get('icono', '')} {tipo_entrega.get('nombre', 'N/A')}"
 
@@ -155,13 +155,18 @@ def render_delivery_promise_card(data: dict, original_request: dict):
         dias_diff = data.get('dias_diferencia', 'N/A')
         fecha_promesa_mantenida = data.get('fecha_promesa_mantenida', False)
         status_promesa = "✅ Mantenida" if fecha_promesa_mantenida else "❌ No mantenida"
-        costo_diff = data.get('costo_diferencia', 0)
+        # costo_diff = data.get('costo_diferencia', 0)
+        costo_original = st.session_state.get('costo_original', 0)
 
+        # Nos aseguramos que los costos se esten obteniendo correctamente
+        print("Costo original", costo_original)
+        print("Costo nuevo", costo)
+
+        costo_diff = costo_original - costo
 
         # Nueva lógica para obtener las rutas descartadas directamente de la consulta a BigQuery
         df_bigquery = get_bigquery_results(original_request)
 
-        rutas_descartadas_list = []
         if not df_bigquery.empty and tienda_rechazada != 'N/A':
             rutas_descartadas_list = get_rejected_routes(df_bigquery, tienda_rechazada)
             rutas_descartadas_formated = get_rejected_routes_display(rutas_descartadas_list)
@@ -207,6 +212,15 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                             {format_datetime(data.get('fecha_entrega', 'N/A'))}
                         </div>
                     </div>
+                
+                    <div style="flex: 1;">
+                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
+                            ⌛ Fecha Promesa
+                        </div>
+                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                        {status_promesa}
+                    </div>
+                </div>
                     <div style="flex: 1;">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">
                             📊 Diferencia
@@ -229,18 +243,6 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         padding: 1rem;
                     ">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
-                            ⌛ Fecha Promesa
-                        </div>
-                        <div style="color: #374151; font-size: 1rem; font-weight: 600;">
-                            {status_promesa}
-                        </div>
-                    </div>
-                    <div style="
-                        background-color: #f1f5f9;
-                        border-radius: 8px;
-                        padding: 1rem;
-                    ">
-                        <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
                             💰 Diferencia de Costo
                         </div>
                         <div style="color: #374151; font-size: 1rem; font-weight: 600;">
@@ -253,7 +255,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         padding: 1rem;
                     ">
                         <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem;">
-                            Tipo de Impacto
+                            ⚖️ Tipo de Impacto
                         </div>
                         <div style="color: #374151; font-size: 1rem; font-weight: 600;">
                             {tipo_impacto_display}
@@ -390,7 +392,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         💰 COSTO TOTAL
                     </div>
                     <div style="color: #374151; font-size: 1rem; font-weight: 600;">
-                        {costo}
+                        {format_currency(costo)}
                     </div>
                 </div>
 
@@ -870,3 +872,33 @@ def get_rejected_routes_display(routes: list):
         formated_routes.append(route[:8] + "..." if len(route) > 8 else route)
 
     return formated_routes
+
+def render_error_card(data_error: dict):
+    detail_error = data_error.get('detail', {})
+    if not detail_error:
+        st.error("❌ No se encontraron detalles del error.")
+        return
+
+    error_type = detail_error.get('error', 'N/A')
+    message = detail_error.get('message', 'N/A')
+    cantidad_solicitada = detail_error.get('cantidad_solicitada', 0)
+    inventario_disponible = detail_error.get('inventario_total_disponible', 0)
+    tiendas_con_inventario = detail_error.get('tiendas_con_inventario', 0)
+    sugerencia = detail_error.get('sugerencia', 'N/A')
+
+    # Formateamos el error
+    error_type = error_type.replace("_", " ")
+
+    st.html(f"""
+    <div style="background-color: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 20px; margin-top: 20px;">
+        <h3 style="color: #c62828; margin-top: 0;">¡Error! 🚫</h3>
+        <p style="font-weight: bold;">Error detectado: {error_type}</p>
+        <p>{message}</p>
+        <hr style="border-top: 1px dashed #ef9a9a;">
+        <p><strong>Cantidad solicitada:</strong> <span style="font-weight: bold; color: #c62828;">{cantidad_solicitada}</span></p>
+        <p><strong>Inventario disponible:</strong> <span style="font-weight: bold; color: #4caf50;">{inventario_disponible}</span></p>
+        <p><strong>Tiendas con inventario:</strong> {tiendas_con_inventario}</p>
+        <hr style="border-top: 1px dashed #ef9a9a;">
+        <p style="font-style: italic;"><strong>Sugerencia:</strong> {sugerencia}</p>
+    </div>
+    """)
