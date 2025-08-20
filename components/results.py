@@ -77,6 +77,13 @@ def render_main_results(data: dict, original_request: dict):
     # Análisis completo de datos vs algoritmo
     render_bigquery_analysis(data, original_request)
 
+    # Detalles de las rutas split seleccionadas
+
+    es_split = data.get("es_split")
+
+    if es_split:
+        render_split_elements(data=data)
+
 
 def render_results_header():
     """Header de la página de resultados"""
@@ -125,18 +132,26 @@ def render_delivery_promise_card(data: dict, original_request: dict):
             {format_datetime(fecha_entrega)}
         </div>
     """)
-
+    # Request original
     fecha_compra = original_request.get('fecha_compra', '')
     codigo_postal = original_request.get('codigo_postal', '')
+    temporada = original_request.get('temporada', '')
+
+    # Resultados generales
     dias_entrega = calculate_days_to_delivery(fecha_compra, fecha_entrega)
     tipo_entrega = data.get('tipo_entrega', {})
     ventana_tiempo = tipo_entrega.get('ventana_tiempo', 'N/A')
+
+    # Detalles lógisticos
     tiendas_display = get_stores_display(data)
     rutas_display = get_routes_display(data)
     score = f"{data.get('score', 0):.3f}"
     costo = data.get('costo', 0)
+
+    # Detalles adicionales
     tiempo_proceso = data.get('tiempo_proceso_ms', 0)
     tipo_display = f"{tipo_entrega.get('icono', '')} {tipo_entrega.get('nombre', 'N/A')}"
+    cantidad_seleccionada = original_request.get('cantidad', 0)
 
     split_info = ""
     if data.get('es_split', False):
@@ -299,6 +314,11 @@ def render_delivery_promise_card(data: dict, original_request: dict):
             margin: 2rem 0;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         ">
+        
+            <h4 style="text-align: center; color: #374151; font-weight: 600; margin-bottom: 1.5rem;">
+            🔎 DETALLES GENERALES
+            </h4>
+            
             <div style="
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -306,6 +326,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                 text-align: center;
                 margin-bottom: 2rem;
             ">
+
                 <div>
                     <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
                         📅 FECHA DE COMPRA
@@ -350,16 +371,21 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         {ventana_tiempo}
                     </div>
                 </div>
+                
             </div>
+            
+            <h4 style="text-align: center; color: #374151; font-weight: 600; margin-bottom: 1.5rem;">
+            🛣️ DETALLES ADICIONALES
+            </h4>
 
             <div style="
-                border-top: 1px solid #e5e7eb;
                 padding-top: 2rem;
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
                 gap: 1.5rem;
                 text-align: center;
             ">
+
                 <div>
                     <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
                         🏪 TIENDA(S) ASIGNADA(S)
@@ -404,6 +430,24 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                         {tiempo_proceso:.2f} ms
                     </div>
                 </div>
+                <div>
+                    <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+                        📊 CANTIDAD SELECCIONADA
+                    </div>
+                    <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                        {cantidad_seleccionada}
+                    </div>
+                </div>
+
+                <div>
+                    <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+                        🚚 TEMPORADA
+                    </div>
+                    <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                        {temporada}
+                    </div>
+                </div>
+                
 
                 {f'<div><div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">📦 TIPO</div><div style="color: #f59e0b; font-size: 1rem; font-weight: 600;">{split_info}</div></div>' if split_info else ''}
             </div>
@@ -902,3 +946,87 @@ def render_error_card(data_error: dict):
         <p style="font-style: italic;"><strong>Sugerencia:</strong> {sugerencia}</p>
     </div>
     """)
+
+
+def render_split_elements(data: dict):
+    """
+    Muestra una tabla con las tiendas involucradas en el split
+    """
+
+    es_split = data.get('es_split', False)
+
+    if es_split:
+        split_info = data.get('split_info', {})
+        if split_info:
+
+            # Obtenemos el total de tiendas usadas
+            rutas_info = split_info.get('detalle_rutas', {})
+            tiendas_seleccionadas = set()
+
+            for ruta in rutas_info:
+                tiendas_seleccionadas.add(ruta['tienda'])
+
+            split_html_content = f"""
+                <div style='
+                    background-color: #FFF3E0;
+                    padding: 1rem;
+                    border-radius: 10px;
+                    margin-top: 1.5rem;
+                    border: 1px solid #FFCC80;
+                    color: #FB8C00;
+                '>
+                    <h4 style='color: #FB8C00; margin: 0 0 0.5rem 0;'>📦 ENTREGA DIVIDIDA (SPLIT)</h4>
+                    <ul style='list-style-position: inside; padding-left: 0;'>
+                        <li style='margin-bottom: 0.3rem;'><strong>Rutas Seleccionadas:</strong> {split_info.get('rutas_seleccionadas', 'N/A')}</li>
+                        <li style='margin-bottom: 0.3rem;'><strong>Tiendas Seleccionadas:</strong> {len(tiendas_seleccionadas)}</li>
+                        <li style='margin-bottom: 0.3rem;'><strong>Cantidad Total:</strong> {split_info.get('cantidad_total', 'N/A')}</li>
+                        <li style='margin-bottom: 0.3rem;'><strong>Costo Total:</strong> {format_currency(split_info.get('costo_total', 0))}</li>
+                        <li style='margin-bottom: 0.3rem;'><strong>Tiempo Total:</strong> {split_info.get('tiempo_total', 'N/A')} días</li>
+                    </ul>
+                </div>
+                """
+
+            detalle_rutas = split_info.get('detalle_rutas', [])
+            if detalle_rutas:
+                split_html_content += "<h4 style='color: #4A4A4A; margin-top: 2rem;'>🔄 DETALLES RUTAS SPLIT:</h4>"
+
+                table_header = """
+                    <table style="width: 100%; border-collapse: collapse; margin: 10px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                        <thead style="background-color: #E3F2FD;">
+                            <tr>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Ruta</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">ID Trazo</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Tienda</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Inventario</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Seleccionados</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Tiempo</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Costo</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Método</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Capacidad_ME</th>
+                                <th style="padding: 12px; border: 1px solid #BBDEFB; text-align: center; color: #3F51B5;">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    """
+                table_rows = ""
+                for i, ruta in enumerate(detalle_rutas):
+                    row_color = "#f9f9f9" if i % 2 == 0 else "#ffffff"
+                    table_rows += f"""
+                        <tr style="background-color: {row_color};">
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">Ruta {i + 1}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('id_trazo', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('tienda', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('inventario_disponible', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('cantidad', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('dias', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{format_currency(ruta.get('costo_total_ruta', 0))}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('metodo', 'N/A')}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('capacidad_me', 0):.3f}</td>
+                            <td style="padding: 10px; border: 1px solid #E0E0E0; text-align: center;">{ruta.get('score', 'N/A')}</td>
+                        </tr>
+                        """
+                table_footer = "</tbody></table>"
+
+                split_html_content += table_header + table_rows + table_footer
+
+            st.html(split_html_content)
