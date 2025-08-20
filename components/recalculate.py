@@ -124,25 +124,6 @@ def render_recalculate_forms(data: dict, original_request: dict):
                 help="Permitir dividir la orden en múltiples tiendas si es necesario"
             )
 
-        # Separador visual
-        st.markdown("---")
-
-        # Checkbox para ver datos que se enviarán
-        ver_datos = st.checkbox("📋 Ver datos que se enviarán al API", value=False)
-        if ver_datos:
-            request_preview = {
-                "codigo_postal": codigo_postal_rq,
-                "sku_id": sku_id_rq,
-                "cantidad": cantidad_rq,
-                "fecha_compra_original": fecha_compra_rq.strftime('%Y-%m-%dT%H:%M:%S.%f'),
-                "fecha_entrega_promesa": fecha_entrega_promesa_rq.strftime('%Y-%m-%dT%H:%M:%S.%f'),
-                "tienda_rechazada": tienda_rechazada_rq,
-                "tipo_impacto": tipo_impacto_text,
-                "temporada_original": temporada_original,
-                "permitir_split": permitir_split
-            }
-            st.json(request_preview)
-
         # Botón de envío del formulario
         submitted = st.form_submit_button(
             "🔄 Ejecutar Recálculo",

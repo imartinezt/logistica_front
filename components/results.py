@@ -5,8 +5,8 @@ import streamlit as st
 from streamlit_calendar import calendar
 
 from components.recalculate import render_recalculate_forms
-from services.bigquery_service import get_bigquery_client, execute_bigquery_query, compare_bigquery_with_results
 from utils.helpers import format_currency, format_datetime
+from components.bigquery_table import render_bigquery_analysis, get_bigquery_results
 
 
 def render_results_page():
@@ -151,7 +151,8 @@ def render_delivery_promise_card(data: dict, original_request: dict):
     # Detalles adicionales
     tiempo_proceso = data.get('tiempo_proceso_ms', 0)
     tipo_display = f"{tipo_entrega.get('icono', '')} {tipo_entrega.get('nombre', 'N/A')}"
-    cantidad_seleccionada = original_request.get('cantidad', 0)
+    cantidad_solicitada = original_request.get('cantidad', 0)
+    inventario_total = data.get('inventario_total_disponible', 0)
 
     split_info = ""
     if data.get('es_split', False):
@@ -379,11 +380,11 @@ def render_delivery_promise_card(data: dict, original_request: dict):
             </h4>
 
             <div style="
-                padding-top: 2rem;
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                 gap: 1.5rem;
                 text-align: center;
+                margin-bottom: 2rem;
             ">
 
                 <div>
@@ -406,15 +407,6 @@ def render_delivery_promise_card(data: dict, original_request: dict):
 
                 <div>
                     <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
-                        ⭐ SCORE
-                    </div>
-                    <div style="color: #374151; font-size: 1rem; font-weight: 600;">
-                        {score}
-                    </div>
-                </div>
-
-                <div>
-                    <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
                         💰 COSTO TOTAL
                     </div>
                     <div style="color: #374151; font-size: 1rem; font-weight: 600;">
@@ -432,10 +424,19 @@ def render_delivery_promise_card(data: dict, original_request: dict):
                 </div>
                 <div>
                     <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
-                        📊 CANTIDAD SELECCIONADA
+                        📊 CANTIDAD SOLICITADA
                     </div>
                     <div style="color: #374151; font-size: 1rem; font-weight: 600;">
-                        {cantidad_seleccionada}
+                        {cantidad_solicitada}
+                    </div>
+                </div>
+                
+                <div>
+                    <div style="color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+                        🏬 INVENTARIO TOTAL
+                    </div>
+                    <div style="color: #374151; font-size: 1rem; font-weight: 600;">
+                        {inventario_total}
                     </div>
                 </div>
 
@@ -625,216 +626,6 @@ def render_external_factors_table(data: dict):
         else:
             st.info("No se detectaron factores externos especiales")
 
-
-@st.cache_data(show_spinner=False)
-def get_bigquery_results(original_request: dict):
-    """
-    Ejecuta una consulta en bigquery y la almacena en cache
-    """
-    bq_client = get_bigquery_client()
-    if not bq_client:
-        st.warning("⚠️ BigQuery no está configurado.")
-        return None
-
-    return execute_bigquery_query(bq_client, original_request)
-
-
-def render_bigquery_analysis(data: dict, original_request: dict):
-    """Análisis simplificado: BigQuery con datos pintados según algoritmo"""
-    st.markdown("---")
-    st.markdown("### 📊 Análisis de Datos: Algoritmo ML")
-
-    df_bigquery = get_bigquery_results(original_request)
-
-    if df_bigquery.empty:
-        st.warning("⚠️ No se encontraron datos en BigQuery para este CP + SKU")
-        return
-
-    # Comparar datos de BigQuery con resultados del algoritmo
-    df_with_status = compare_bigquery_with_results(df_bigquery, data)
-
-    # Mostrar resumen rápido
-    total_registros = len(df_with_status)
-    ganadores = len(df_with_status[df_with_status['STATUS_ML'] == 'GANADOR'])
-    alternativas = len(df_with_status[df_with_status['STATUS_ML'] == 'ALTERNATIVA'])
-    descartadas = len(df_with_status[df_with_status['STATUS_ML'] == 'DESCARTADA'])
-    sin_match = len(df_with_status[df_with_status['STATUS_ML'] == 'SIN_MATCH'])
-
-    # Verificar si es recálculo para mostrar métricas apropiadas
-    es_recalculo = data.get('es_recalculo', False)
-
-    if es_recalculo:
-        # Mostrar 5 columnas cuando hay recálculo
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric("📊 Total Registros", total_registros)
-        with col2:
-            st.metric("🟢 Ganadores", ganadores)
-        with col3:
-            st.metric("🟡 Alternativas", alternativas)
-        with col4:
-            st.metric("🔴 Descartadas", descartadas)
-        with col5:
-            st.metric("⚪ Sin Match", sin_match)
-    else:
-        # Mostrar 4 columnas cuando no hay recálculo
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("📊 Total Registros", total_registros)
-        with col2:
-            st.metric("🟢 Ganadores", ganadores)
-        with col3:
-            st.metric("🟡 Alternativas", alternativas)
-        with col4:
-            st.metric("⚪ Sin Match", sin_match)
-
-    # Tabla principal con colores
-    render_bigquery_table_with_colors(df_with_status, es_recalculo)
-
-
-def render_bigquery_table_with_colors(df_with_status: pd.DataFrame, es_recalculo: bool = False):
-    """Renderizar tabla de BigQuery con colores según status ML usando columnas reales"""
-
-    # Verificar que tengamos datos
-    if df_with_status.empty:
-        st.warning("No hay datos para mostrar")
-        return
-
-    # Función para aplicar colores - usar la columna STATUS_ML que debe existir
-    def style_row_by_status(row):
-        if 'STATUS_ML' not in row:
-            return [''] * len(row)  # Sin estilo si no hay STATUS_ML
-
-        status = row['STATUS_ML']
-        if status == 'GANADOR':
-            return ['background-color: #dcfce7; color: #166534; font-weight: bold'] * len(row)  # Verde
-        elif status == 'ALTERNATIVA':
-            return ['background-color: #fef3c7; color: #92400e'] * len(row)  # Amarillo
-        elif status == 'DESCARTADA':
-            return ['background-color: #fecaca; color: #dc2626; font-weight: bold'] * len(row)  # Rojo
-        else:
-            return ['background-color: #f9fafb; color: #374151'] * len(row)  # Gris claro
-
-    # Preparar DataFrame para mostrar
-    df_display = df_with_status.copy()
-
-    # Verificar que STATUS_ML existe
-    if 'STATUS_ML' not in df_display.columns:
-        st.error("Error: No se pudo procesar el estado ML")
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-        return
-
-    # Agregar columna visual de status
-    status_display = []
-    for status in df_display['STATUS_ML']:
-        if status == 'GANADOR':
-            status_display.append('🟢 GANADOR')
-        elif status == 'ALTERNATIVA':
-            status_display.append('🟡 ALTERNATIVA')
-        elif status == 'DESCARTADA':
-            status_display.append('🔴 DESCARTADA')
-        else:
-            status_display.append('⚪ SIN MATCH')
-
-    df_display['STATUS'] = status_display
-
-    # Preparar columnas para mostrar (STATUS primero, luego las originales, pero NO STATUS_ML)
-    cols_to_show = ['STATUS'] + [col for col in df_display.columns if col not in ['STATUS', 'STATUS_ML']]
-
-    # Aplicar estilos al DataFrame completo (que aún tiene STATUS_ML)
-    styled_df = df_display.style.apply(style_row_by_status, axis=1)
-
-    # Configurar columnas dinámicamente según lo que existe
-    column_config = {
-        "STATUS": st.column_config.TextColumn(
-            "Status ML",
-            help="Resultado del algoritmo ML",
-            width="medium"
-        )
-    }
-
-    # Agregar configuraciones para columnas comunes si existen
-    for col in df_display.columns:
-        if col in ['STATUS', 'STATUS_ML']:
-            continue
-
-        col_upper = str(col).upper()
-
-        if 'COSTO' in col_upper:
-            column_config[col] = st.column_config.NumberColumn(
-                col,
-                help="Costo de la ruta",
-                format="$%.0f"
-            )
-        elif 'TIEMPO' in col_upper or 'DIAS' in col_upper:
-            column_config[col] = st.column_config.NumberColumn(
-                col,
-                help="Tiempo de entrega",
-                format="%d"
-            )
-        elif 'INVENTARIO' in col_upper:
-            column_config[col] = st.column_config.NumberColumn(
-                col,
-                help="Inventario disponible",
-                format="%d"
-            )
-        elif 'TIENDA' in col_upper or 'TDA' in col_upper:
-            column_config[col] = st.column_config.NumberColumn(
-                col,
-                help="ID de la tienda",
-                format="%d"
-            )
-        elif 'TRAZO' in col_upper:
-            column_config[col] = st.column_config.TextColumn(
-                col,
-                help="ID del trazo",
-                width="medium"
-            )
-
-    # Mostrar tabla - usar subset de columnas para ocultar STATUS_ML
-    try:
-        st.dataframe(
-            styled_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config=column_config,
-            column_order=cols_to_show  # Especificar orden de columnas excluyendo STATUS_ML
-        )
-    except Exception as e:
-        st.error(f"Error mostrando tabla estilizada: {str(e)}")
-        # Fallback: mostrar tabla sin estilos
-        df_simple = df_display[cols_to_show]
-        st.dataframe(df_simple, use_container_width=True, hide_index=True)
-
-    # Leyenda - incluir descartadas solo si es recálculo
-    leyenda_descartadas = """
-        <span style="display: flex; align-items: center; gap: 0.5rem;">
-            <div style="width: 16px; height: 16px; background: #fecaca; border: 1px solid #dc2626; border-radius: 3px;"></div>
-            <strong>🔴 DESCARTADA:</strong> Ruta descartada en recálculo
-        </span>
-    """ if es_recalculo else ""
-
-    st.html(f"""
-        <div style="margin-top: 1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-            <div style="display: flex; gap: 2rem; align-items: center; justify-content: center; flex-wrap: wrap;">
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="width: 16px; height: 16px; background: #dcfce7; border: 1px solid #16a34a; border-radius: 3px;"></div>
-                    <strong>🟢 GANADOR:</strong> Seleccionado por el algoritmo
-                </span>
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="width: 16px; height: 16px; background: #fef3c7; border: 1px solid #d97706; border-radius: 3px;"></div>
-                    <strong>🟡 ALTERNATIVA:</strong> Evaluado pero no seleccionado
-                </span>
-                {leyenda_descartadas}
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="width: 16px; height: 16px; background: #f9fafb; border: 1px solid #6b7280; border-radius: 3px;"></div>
-                    <strong>⚪ SIN MATCH:</strong> No evaluado por el algoritmo
-                </span>
-            </div>
-        </div>
-    """)
-
-
 def get_rejected_routes(df_bigquery: pd.DataFrame, rejected_store_id: str) -> list:
     """
     Obtiene todas las rutas asociadas a una tienda rechazada del DataFrame de BigQuery.
@@ -977,9 +768,8 @@ def render_split_elements(data: dict):
                 '>
                     <h4 style='color: #FB8C00; margin: 0 0 0.5rem 0;'>📦 ENTREGA DIVIDIDA (SPLIT)</h4>
                     <ul style='list-style-position: inside; padding-left: 0;'>
-                        <li style='margin-bottom: 0.3rem;'><strong>Rutas Seleccionadas:</strong> {split_info.get('rutas_seleccionadas', 'N/A')}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Tiendas Seleccionadas:</strong> {len(tiendas_seleccionadas)}</li>
-                        <li style='margin-bottom: 0.3rem;'><strong>Cantidad Total:</strong> {split_info.get('cantidad_total', 'N/A')}</li>
+                        <li style='margin-bottom: 0.3rem;'><strong>Cantidad Solicitada:</strong> {split_info.get('cantidad_total', 'N/A')}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Costo Total:</strong> {format_currency(split_info.get('costo_total', 0))}</li>
                         <li style='margin-bottom: 0.3rem;'><strong>Tiempo Total:</strong> {split_info.get('tiempo_total', 'N/A')} días</li>
                     </ul>
@@ -988,7 +778,7 @@ def render_split_elements(data: dict):
 
             detalle_rutas = split_info.get('detalle_rutas', [])
             if detalle_rutas:
-                split_html_content += "<h4 style='color: #4A4A4A; margin-top: 2rem;'>🔄 DETALLES RUTAS SPLIT:</h4>"
+                #split_html_content += "<h4 style='color: #4A4A4A; margin-top: 2rem;'>🔄 DETALLES RUTAS SPLIT</h4>"
 
                 table_header = """
                     <table style="width: 100%; border-collapse: collapse; margin: 10px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
@@ -1029,4 +819,6 @@ def render_split_elements(data: dict):
 
                 split_html_content += table_header + table_rows + table_footer
 
+
+            st.markdown("### 🔀 Detalle rutas - Caso split")
             st.html(split_html_content)
