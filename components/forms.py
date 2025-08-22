@@ -114,8 +114,8 @@ def process_prediction(payload: dict):
 
         with st.status("🔄 Procesando predicción...", expanded=True) as status:
             st.write("📡 Enviando solicitud al servidor...")
-            st.write(f"📍 CP: {payload["codigo_postal"]} | 📦 SKU: {payload["sku_id"]} | 🔢 Qty: {payload["cantidad"]} | ⚡ Temporada: {payload["temporada"]}")
-
+            st.write(
+                f'📍 CP: {payload["codigo_postal"]} | 📦 SKU: {payload["sku_id"]} | 🔢 Qty: {payload["cantidad"]} | ⚡ Temporada: {payload["temporada"]}')
             api_client = APIClient()
             result, error = api_client.predict_delivery(payload)
 
