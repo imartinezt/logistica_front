@@ -31,6 +31,34 @@ def render_recalculate_forms(data: dict, original_request: dict):
 
     st.markdown("**Modifica los datos que se utilizarán para el recálculo**")
 
+    col_split_config = st.columns(1)[0]
+    with col_split_config:
+        st.markdown("##### ⚙️ Configuración de Split (Opcional)")
+
+        # Usamos un toggle para habilitar/deshabilitar las opciones de split
+        habilitar_split = st.toggle("Habilitar opciones de Split",
+                                    help="Activa esta opción para forzar un split en el recálculo.")
+
+        opcion_split = None
+        forzar_split_rq = None
+
+        if habilitar_split:
+            opcion_split = st.radio(
+                "Selecciona el tipo de split",
+                ("Split Inteligente", "Split Manual"),
+                help="Elige entre dejar que el sistema decida o forzar un número de tiendas."
+            )
+
+            if opcion_split == "Split Manual":
+                tiendas_inventario = data.get("tiendas_con_inventario", 2)
+                forzar_split_rq = st.slider(
+                    "Forzar Split entre tiendas",
+                    min_value=2,
+                    max_value=int(tiendas_inventario),
+                    value=2,
+                    help="Número de tiendas a considerar para el split."
+                )
+
     with st.form(key="recalculation_form"):
         col1, col2, col3 = st.columns(3)
 
@@ -116,13 +144,6 @@ def render_recalculate_forms(data: dict, original_request: dict):
             }
             st.markdown(f"**Nivel seleccionado:** {impacto_colors[tipo_impacto_text]} {tipo_impacto_text}")
 
-            # Checkbox para permitir split
-            permitir_split = st.checkbox(
-                "Permitir Split",
-                value=True,
-                help="Permitir dividir la orden en múltiples tiendas si es necesario"
-            )
-
         # Botón de envío del formulario
         submitted = st.form_submit_button(
             "🔄 Ejecutar Recálculo",
@@ -137,7 +158,7 @@ def render_recalculate_forms(data: dict, original_request: dict):
                 return
 
             # Crear el diccionario de datos del request
-            request_data = {
+            payload = {
                 "codigo_postal": codigo_postal_rq,
                 "sku_id": sku_id_rq,
                 "cantidad": cantidad_rq,
@@ -145,21 +166,28 @@ def render_recalculate_forms(data: dict, original_request: dict):
                 "fecha_entrega_promesa": fecha_entrega_promesa_rq.strftime('%Y-%m-%dT%H:%M:%S.%f'),
                 "tienda_rechazada": tienda_rechazada_rq,
                 "tipo_impacto": tipo_impacto_text,
-                "temporada_original": temporada_original,
+                "temporada_original": temporada_original
             }
 
-            execute_recalculation(request_data, data)
+            # Parametros de split (Opcionales)
+            if habilitar_split:
+                if opcion_split == "Split Inteligente":
+                    payload["forzar_split_inteligente"] = True
+                elif opcion_split == "Split Manual":
+                    payload["forzar_split_tiendas"] = forzar_split_rq
+
+            execute_recalculation(payload, data)
 
 
-def execute_recalculation(request_data: dict, data: dict):
+def execute_recalculation(payload: dict, data: dict):
     """Ejecutar recálculo con los datos recibidos del formulario."""
     try:
         # Extraer valores para logging
-        codigo_postal = request_data.get('codigo_postal')
-        sku_id = request_data.get('sku_id')
-        cantidad = request_data.get('cantidad')
-        tienda_rechazada = request_data.get('tienda_rechazada')
-        tipo_impacto = request_data.get('tipo_impacto')
+        codigo_postal = payload.get('codigo_postal')
+        sku_id = payload.get('sku_id')
+        cantidad = payload.get('cantidad')
+        tienda_rechazada = payload.get('tienda_rechazada')
+        tipo_impacto = payload.get('tipo_impacto')
 
         costo_original = data.get('costo', 0)
         # Hard-codeando costo original
@@ -179,7 +207,7 @@ def execute_recalculation(request_data: dict, data: dict):
             st.write(f"⚡ Tipo de impacto: {tipo_impacto}")
 
             api_client = APIClient()
-            result, error = api_client.recalculate_delivery(**request_data)
+            result, error = api_client.recalculate_delivery(payload)
 
             if result:
                 st.write("✅ Recálculo completado exitosamente")
@@ -198,7 +226,7 @@ def execute_recalculation(request_data: dict, data: dict):
 
                     with st.expander("🔍 Detalles del Error", expanded=False):
                         st.write("**Datos enviados:**")
-                        st.json(request_data)
+                        st.json(payload)
                         st.write(f"**Error recibido:** {error}")
 
     except Exception as e:

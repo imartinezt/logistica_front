@@ -46,9 +46,7 @@ class APIClient:
         except Exception as e:
             return None, f"❌ Error inesperado: {str(e)}"
 
-    def recalculate_delivery(self, codigo_postal: str, sku_id: str, cantidad: int,
-                             fecha_compra_original: str, fecha_entrega_promesa: str,
-                             tienda_rechazada: int, tipo_impacto: str, temporada_original: str, permitir_split: bool = True):
+    def recalculate_delivery(self, payload: dict):
         """
         Realizar recálculo de entrega cuando una tienda es rechazada
 
@@ -63,23 +61,12 @@ class APIClient:
             tienda_rechazada (int): ID de tienda rechazada
             tipo_impacto (str): Tipo de impacto ("BAJA", "MEDIANA", "ALTA")
             temporada_original (str): Temporada original (BAJA, ALTA)
-            permitir_split (bool): Permitir división en múltiples tiendas
-
+            forzar_split_tiendas (int): Numero de tiendas a considerar durante el split (OPCIONAL)
+            forzar_split_inteligente (bool): Solicitar que el sistema asigne de forma inteligente los splits (OPCIONAL)
         Returns:
             tuple: (result_data, error_message)
         """
         url = f"{self.base_url}{Config.API_RECALCULATE_ENDPOINT}"
-        payload = {
-            "codigo_postal": codigo_postal,
-            "sku_id": sku_id,
-            "cantidad": cantidad,
-            "fecha_compra_original": fecha_compra_original,
-            "fecha_entrega_promesa": fecha_entrega_promesa,
-            "tienda_rechazada": tienda_rechazada,
-            "tipo_impacto": tipo_impacto,
-            "temporada_original": temporada_original,
-            "permitir_split": permitir_split # TODO: Integrar el parametro de forzar split
-        }
 
         try:
             response = requests.post(url, json=payload, timeout=self.timeout)

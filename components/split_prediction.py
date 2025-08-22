@@ -14,7 +14,6 @@ def render_split_forms(data: dict, original_request: dict):
     codigo_postal_init = original_request.get('codigo_postal', '')
     sku_id_init = original_request.get('sku_id', '')
     cantidad_init = original_request.get('cantidad', 1)
-    temporada_original = original_request.get('temporada', '')
     fecha_compra_init = original_request.get('fecha_compra', '')
     tiendas_inventario = data.get("tiendas_con_inventario", 0)
 
@@ -42,9 +41,9 @@ def render_split_forms(data: dict, original_request: dict):
         forzar_split_rq = None
         if opcion_split == "Split Manual":
             forzar_split_rq = st.slider(
-                "Forzar Split entre tiendas",
+                "Selecciona el número de tiendas para el split",
                 min_value=2,
-                max_value=int(data.get("tiendas_con_inventario", 0)),
+                max_value=int(tiendas_inventario),
                 value=2,
                 help="Número de tiendas a considerar para el split."
             )
