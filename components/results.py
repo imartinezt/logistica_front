@@ -20,21 +20,31 @@ def render_results_page():
 
     render_main_results(data, original_request)
 
-    # --- Lógica para mostrar/ocultar el formulario del recalculo ---
-    if not st.session_state.show_recalculate_form:
-        if st.button("🔄 Activar Recálculo"):
-            st.session_state.show_recalculate_form = True
-
+    # Lógica para mostrar/ocultar los formularios de recálculo con un solo botón
     if st.session_state.show_recalculate_form:
+        # Si el formulario está visible, el botón lo ocultará
+        button_label = "❌ Ocultar opciones avanzadas"
+        if st.button(button_label):
+            st.session_state.show_recalculate_form = False
+            st.rerun()
+    else:
+        # Si el formulario está oculto, el botón lo mostrará
+        button_label = "🔄 Mostrar opciones avanzadas"
+        if st.button(button_label):
+            st.session_state.show_recalculate_form = True
+            st.rerun()
 
+    # Renderizar los tabs solo si la variable de estado es True
+    if st.session_state.show_recalculate_form:
         tab1, tab2 = st.tabs(["❌ Recálculo", "📍Volver a calcular"])
 
         with tab1:
+            # Asume que esta función ya está definida en otro lugar
             render_recalculate_forms(data, original_request)
 
         with tab2:
+            # Asume que esta función ya está definida en otro lugar
             render_split_forms(data, original_request)
-        # render_recalculate_forms(data, original_request)
 
 def render_main_results(data: dict, original_request: dict):
     """
