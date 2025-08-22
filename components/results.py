@@ -5,6 +5,7 @@ import streamlit as st
 from streamlit_calendar import calendar
 
 from components.recalculate import render_recalculate_forms
+from components.recalculate_split import render_recalculate_split_forms
 from utils.helpers import format_currency, format_datetime
 from components.bigquery_table import render_bigquery_analysis, get_bigquery_results
 
@@ -21,12 +22,19 @@ def render_results_page():
 
     # --- Lógica para mostrar/ocultar el formulario del recalculo ---
     if not st.session_state.show_recalculate_form:
-        if st.button("🔄 Activar Recálculo", use_container_width=True):
+        if st.button("🔄 Activar Recálculo"):
             st.session_state.show_recalculate_form = True
 
     if st.session_state.show_recalculate_form:
-        render_recalculate_forms(data, original_request)
 
+        tab1, tab2 = st.tabs(["❌ Recálculo", "📍Volver a calcular"])
+
+        with tab1:
+            render_recalculate_forms(data, original_request)
+
+        with tab2:
+            render_recalculate_split_forms(data, original_request)
+        # render_recalculate_forms(data, original_request)
 
 def render_main_results(data: dict, original_request: dict):
     """
@@ -317,7 +325,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
         ">
         
             <h4 style="text-align: center; color: #374151; font-weight: 600; margin-bottom: 1.5rem;">
-            🔎 DETALLES GENERALES
+            🔎 INFORMACIÓN DE ENTREGA
             </h4>
             
             <div style="
@@ -376,7 +384,7 @@ def render_delivery_promise_card(data: dict, original_request: dict):
             </div>
             
             <h4 style="text-align: center; color: #374151; font-weight: 600; margin-bottom: 1.5rem;">
-            🛣️ DETALLES ADICIONALES
+            🛣️ INFORMACIÓN LOGÍSTICA
             </h4>
 
             <div style="
@@ -457,6 +465,35 @@ def render_delivery_promise_card(data: dict, original_request: dict):
         </div>
     """)
 
+def render_error_card(data_error: dict):
+    detail_error = data_error.get('detail', {})
+    if not detail_error:
+        st.error("❌ No se encontraron detalles del error.")
+        return
+
+    error_type = detail_error.get('error', 'N/A')
+    message = detail_error.get('message', 'N/A')
+    cantidad_solicitada = detail_error.get('cantidad_solicitada', 0)
+    inventario_disponible = detail_error.get('inventario_total_disponible', 0)
+    tiendas_con_inventario = detail_error.get('tiendas_con_inventario', 0)
+    sugerencia = detail_error.get('sugerencia', 'N/A')
+
+    # Formateamos el error
+    error_type = error_type.replace("_", " ")
+
+    st.html(f"""
+    <div style="background-color: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 20px; margin-top: 20px;">
+        <h3 style="color: #c62828; margin-top: 0;">¡Error! 🚫</h3>
+        <p style="font-weight: bold;">Error detectado: {error_type}</p>
+        <p>{message}</p>
+        <hr style="border-top: 1px dashed #ef9a9a;">
+        <p><strong>Cantidad solicitada:</strong> <span style="font-weight: bold; color: #c62828;">{cantidad_solicitada}</span></p>
+        <p><strong>Inventario disponible:</strong> <span style="font-weight: bold; color: #4caf50;">{inventario_disponible}</span></p>
+        <p><strong>Tiendas con inventario:</strong> {tiendas_con_inventario}</p>
+        <hr style="border-top: 1px dashed #ef9a9a;">
+        <p style="font-style: italic;"><strong>Sugerencia:</strong> {sugerencia}</p>
+    </div>
+    """)
 
 def render_delivery_calendar(data: dict, original_request: dict):
     """Calendario de fechas importantes con mejor diseño"""
@@ -539,7 +576,6 @@ def render_delivery_calendar(data: dict, original_request: dict):
     }
 
     calendar(events=events, options=calendar_options, key="delivery_calendar")
-
 
 def render_external_factors_table(data: dict):
     """Tabla de factores externos y contexto con mejor diseño"""
@@ -626,119 +662,6 @@ def render_external_factors_table(data: dict):
         else:
             st.info("No se detectaron factores externos especiales")
 
-def get_rejected_routes(df_bigquery: pd.DataFrame, rejected_store_id: str) -> list:
-    """
-    Obtiene todas las rutas asociadas a una tienda rechazada del DataFrame de BigQuery.
-
-    Args:
-        df_bigquery (pd.DataFrame): El DataFrame completo con los resultados de BigQuery.
-        rejected_store_id (str): El ID de la tienda que fue rechazada.
-
-    Returns:
-        list: Una lista de IDs de rutas asociadas a la tienda rechazada.
-    """
-
-    if 'TDA_CVE' in df_bigquery.columns and 'ID_TRAZO' in df_bigquery.columns:
-        # Filtra el DataFrame para obtener solo las filas de la tienda rechazada
-        rejected_routes_df = df_bigquery[df_bigquery['TDA_CVE'] == rejected_store_id]
-
-        # Extrae los IDs de las rutas y elimina duplicados
-        rejected_routes = rejected_routes_df['ID_TRAZO'].unique().tolist()
-
-        return rejected_routes
-
-    else:
-        st.warning("⚠️ El DataFrame no contiene las columnas necesarias ('ID_TIENDA' o 'ID_TRAZO').")
-        return []
-
-
-# Funciones auxiliares
-def calculate_days_to_delivery(fecha_compra_str: str, fecha_entrega_str: str) -> str:
-    """Calcular días hasta entrega"""
-    if not fecha_compra_str or not fecha_entrega_str:
-        return "N/A"
-
-    try:
-        fecha_compra = datetime.fromisoformat(fecha_compra_str.replace('Z', '+00:00'))
-        fecha_entrega = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00'))
-        diferencia = (fecha_entrega.date() - fecha_compra.date()).days
-
-        if diferencia == 0:
-            return "HOY"
-        elif diferencia == 1:
-            return "MAÑANA"
-        elif diferencia > 0:
-            return f"EN {diferencia} DÍAS"
-        else:
-            return f"HACE {abs(diferencia)} DÍAS"
-    except:
-        return "N/A"
-
-
-def get_stores_display(data: dict) -> str:
-    """Obtener display de tiendas (manejar splits)"""
-    if data.get('es_split', False):
-        split_info = data.get('split_info', {})
-        detalle_rutas = split_info.get('detalle_rutas', [])
-        tiendas = [str(ruta.get('tienda', '')) for ruta in detalle_rutas]
-        return ', '.join(tiendas) if tiendas else 'N/A'
-    else:
-        return str(data.get('tienda', 'N/A'))
-
-
-def get_routes_display(data: dict) -> str:
-    """Obtener display de rutas (manejar splits)"""
-    if data.get('es_split', False):
-        split_info = data.get('split_info', {})
-        return f"{split_info.get('rutas_seleccionadas', 'N/A')} rutas"
-    else:
-        trazo_id = data.get('id_trazo', 'N/A')
-        # Mostrar solo los primeros 8 caracteres del ID para mejor legibilidad
-        return trazo_id[:8] + "..." if len(trazo_id) > 8 else trazo_id
-
-def get_rejected_routes_display(routes: list):
-    """
-    Formatear cada elemento de la lista de rutas rechazadas.
-    """
-    formated_routes = []
-
-    for route in routes:
-
-        formated_routes.append(route[:8] + "..." if len(route) > 8 else route)
-
-    return formated_routes
-
-def render_error_card(data_error: dict):
-    detail_error = data_error.get('detail', {})
-    if not detail_error:
-        st.error("❌ No se encontraron detalles del error.")
-        return
-
-    error_type = detail_error.get('error', 'N/A')
-    message = detail_error.get('message', 'N/A')
-    cantidad_solicitada = detail_error.get('cantidad_solicitada', 0)
-    inventario_disponible = detail_error.get('inventario_total_disponible', 0)
-    tiendas_con_inventario = detail_error.get('tiendas_con_inventario', 0)
-    sugerencia = detail_error.get('sugerencia', 'N/A')
-
-    # Formateamos el error
-    error_type = error_type.replace("_", " ")
-
-    st.html(f"""
-    <div style="background-color: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 20px; margin-top: 20px;">
-        <h3 style="color: #c62828; margin-top: 0;">¡Error! 🚫</h3>
-        <p style="font-weight: bold;">Error detectado: {error_type}</p>
-        <p>{message}</p>
-        <hr style="border-top: 1px dashed #ef9a9a;">
-        <p><strong>Cantidad solicitada:</strong> <span style="font-weight: bold; color: #c62828;">{cantidad_solicitada}</span></p>
-        <p><strong>Inventario disponible:</strong> <span style="font-weight: bold; color: #4caf50;">{inventario_disponible}</span></p>
-        <p><strong>Tiendas con inventario:</strong> {tiendas_con_inventario}</p>
-        <hr style="border-top: 1px dashed #ef9a9a;">
-        <p style="font-style: italic;"><strong>Sugerencia:</strong> {sugerencia}</p>
-    </div>
-    """)
-
-
 def render_split_elements(data: dict):
     """
     Muestra una tabla con las tiendas involucradas en el split
@@ -822,3 +745,84 @@ def render_split_elements(data: dict):
 
             st.markdown("### 🔀 Detalle rutas - Caso split")
             st.html(split_html_content)
+
+# Funciones auxiliares
+def calculate_days_to_delivery(fecha_compra_str: str, fecha_entrega_str: str) -> str:
+    """Calcular días hasta entrega"""
+    if not fecha_compra_str or not fecha_entrega_str:
+        return "N/A"
+
+    try:
+        fecha_compra = datetime.fromisoformat(fecha_compra_str.replace('Z', '+00:00'))
+        fecha_entrega = datetime.fromisoformat(fecha_entrega_str.replace('Z', '+00:00'))
+        diferencia = (fecha_entrega.date() - fecha_compra.date()).days
+
+        if diferencia == 0:
+            return "HOY"
+        elif diferencia == 1:
+            return "MAÑANA"
+        elif diferencia > 0:
+            return f"EN {diferencia} DÍAS"
+        else:
+            return f"HACE {abs(diferencia)} DÍAS"
+    except:
+        return "N/A"
+
+def get_rejected_routes(df_bigquery: pd.DataFrame, rejected_store_id: str) -> list:
+    """
+    Obtiene todas las rutas asociadas a una tienda rechazada del DataFrame de BigQuery.
+
+    Args:
+        df_bigquery (pd.DataFrame): El DataFrame completo con los resultados de BigQuery.
+        rejected_store_id (str): El ID de la tienda que fue rechazada.
+
+    Returns:
+        list: Una lista de IDs de rutas asociadas a la tienda rechazada.
+    """
+
+    if 'TDA_CVE' in df_bigquery.columns and 'ID_TRAZO' in df_bigquery.columns:
+        # Filtra el DataFrame para obtener solo las filas de la tienda rechazada
+        rejected_routes_df = df_bigquery[df_bigquery['TDA_CVE'] == rejected_store_id]
+
+        # Extrae los IDs de las rutas y elimina duplicados
+        rejected_routes = rejected_routes_df['ID_TRAZO'].unique().tolist()
+
+        return rejected_routes
+
+    else:
+        st.warning("⚠️ El DataFrame no contiene las columnas necesarias ('ID_TIENDA' o 'ID_TRAZO').")
+        return []
+
+def get_stores_display(data: dict) -> str:
+    """Obtener display de tiendas (manejar splits)"""
+    if data.get('es_split', False):
+        split_info = data.get('split_info', {})
+        detalle_rutas = split_info.get('detalle_rutas', [])
+        tiendas = [str(ruta.get('tienda', '')) for ruta in detalle_rutas]
+        return ', '.join(tiendas) if tiendas else 'N/A'
+    else:
+        return str(data.get('tienda', 'N/A'))
+
+
+def get_routes_display(data: dict) -> str:
+    """Obtener display de rutas (manejar splits)"""
+    if data.get('es_split', False):
+        split_info = data.get('split_info', {})
+        return f"{split_info.get('rutas_seleccionadas', 'N/A')} rutas"
+    else:
+        trazo_id = data.get('id_trazo', 'N/A')
+        # Mostrar solo los primeros 8 caracteres del ID para mejor legibilidad
+        return trazo_id[:8] + "..." if len(trazo_id) > 8 else trazo_id
+
+def get_rejected_routes_display(routes: list):
+    """
+    Formatear cada elemento de la lista de rutas rechazadas.
+    """
+    formated_routes = []
+
+    for route in routes:
+
+        formated_routes.append(route[:8] + "..." if len(route) > 8 else route)
+
+    return formated_routes
+

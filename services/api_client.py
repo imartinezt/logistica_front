@@ -9,9 +9,9 @@ class APIClient:
         self.base_url = Config.API_BASE_URL
         self.timeout = Config.API_TIMEOUT
 
-    def predict_delivery(self, codigo_postal: str, sku_id: str, cantidad: int, temporada: str, fecha_compra: str):
+    def predict_delivery(self, payload: dict):
         """
-        Realizar predicción de entrega
+        Realizar predicción de entrega dado un payload determinado
 
         Args:
             codigo_postal (str): Código postal de destino
@@ -19,18 +19,14 @@ class APIClient:
             cantidad (int): Cantidad de productos
             temporada (str): Temporada comercial
             fecha_compra (str): Fecha de compra en formato ISO
+            forzar_split_tiendas (int): Numero de tiendas a considerar durante el split (OPCIONAL)
+            forzar_split_inteligente (bool): Solicitar que el sistema asigne de forma inteligente los splits (OPCIONAL)
+
 
         Returns:
             tuple: (result_data, error_message)
         """
         url = f"{self.base_url}{Config.API_PREDICT_ENDPOINT}"
-        payload = {
-            "codigo_postal": codigo_postal,
-            "sku_id": sku_id,
-            "cantidad": cantidad,
-            "temporada": temporada,
-            "fecha_compra": fecha_compra
-        }
 
         try:
             response = requests.post(url, json=payload, timeout=self.timeout)
@@ -83,7 +79,7 @@ class APIClient:
             "tienda_rechazada": tienda_rechazada,
             "tipo_impacto": tipo_impacto,
             "temporada_original": temporada_original,
-            "permitir_split": permitir_split
+            "permitir_split": permitir_split # TODO: Integrar el parametro de forzar split
         }
 
         try:

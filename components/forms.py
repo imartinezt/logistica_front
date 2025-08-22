@@ -72,12 +72,29 @@ def render_prediction_form():
 
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # TODO: Modificar el formato de la fecha
+        fecha_hora_compra = datetime.combine(fecha_compra, hora_compra)
+        fecha_str = fecha_hora_compra.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+
+
+        # Creamos el payload para mandar la solicitud al endpoint
+        payload = {
+            "codigo_postal": codigo_postal,
+            "sku_id": sku_id,
+            "cantidad": cantidad,
+            "temporada": temporada,
+            "fecha_compra": fecha_str,
+        }
+
+        print(payload)
+
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("🚀 Calcular Fecha de Entrega", type="primary", use_container_width=True):
                 if validate_inputs(codigo_postal, sku_id):
-                    process_prediction(codigo_postal, sku_id, cantidad, temporada, fecha_compra, hora_compra)
+                    process_prediction(payload)
 
 
 def validate_inputs(codigo_postal: str, sku_id: str) -> bool:
@@ -93,20 +110,18 @@ def validate_inputs(codigo_postal: str, sku_id: str) -> bool:
     return True
 
 
-def process_prediction(codigo_postal: str, sku_id: str, cantidad: int, temporada: str, fecha_compra, hora_compra):
+def process_prediction(payload: dict):
     """Procesar predicción con indicadores visuales"""
     try:
-        fecha_hora_compra = datetime.combine(fecha_compra, hora_compra)
-        fecha_str = fecha_hora_compra.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+        # payload["fecha_compra"] = fecha_str
 
         with st.status("🔄 Procesando predicción...", expanded=True) as status:
             st.write("📡 Enviando solicitud al servidor...")
-            st.write(f"📍 CP: {codigo_postal} | 📦 SKU: {sku_id} | 🔢 Qty: {cantidad} | ⚡ Temporada: {temporada}")
+            st.write(f"📍 CP: {payload["codigo_postal"]} | 📦 SKU: {payload["sku_id"]} | 🔢 Qty: {payload["cantidad"]} | ⚡ Temporada: {payload["temporada"]}")
 
             api_client = APIClient()
-            result, error = api_client.predict_delivery(
-                codigo_postal, sku_id, cantidad, temporada, fecha_str
-            )
+            result, error = api_client.predict_delivery(payload)
 
             if result:
                 st.write("✅ Predicción completada exitosamente")
@@ -114,16 +129,17 @@ def process_prediction(codigo_postal: str, sku_id: str, cantidad: int, temporada
 
                 st.session_state.prediction_data = result
                 st.session_state.original_request = {
-                    "codigo_postal": codigo_postal,
-                    "sku_id": sku_id,
-                    "cantidad": cantidad,
-                    "temporada": temporada,
-                    "fecha_compra": fecha_str
+                    "codigo_postal": payload["codigo_postal"],
+                    "sku_id": payload["sku_id"],
+                    "cantidad": payload["cantidad"],
+                    "temporada": payload["temporada"],
+                    "fecha_compra": payload["fecha_compra"],
                 }
                 st.session_state.show_results = True
                 st.rerun()
             else:
                 status.update(label="❌ Ocurrió un error, por favor revisa los detalles.", state="error", expanded=False) # Mensaje de error por defecto
+                print(error)
                 render_error_card(data_error=error)
 
     except Exception as e:
