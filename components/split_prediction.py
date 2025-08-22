@@ -4,7 +4,7 @@ from config.settings import Config
 from services.api_client import APIClient
 
 
-def render_recalculate_split_forms(data: dict, original_request: dict):
+def render_split_forms(data: dict, original_request: dict):
     """
     Renderiza un formulario para ejecutar un recalculo simple con split (sin tienda rechazada)
     """
@@ -16,7 +16,6 @@ def render_recalculate_split_forms(data: dict, original_request: dict):
     cantidad_init = original_request.get('cantidad', 1)
     temporada_original = original_request.get('temporada', '')
     fecha_compra_init = original_request.get('fecha_compra', '')
-
     tiendas_inventario = data.get("tiendas_con_inventario", 0)
 
     can_recalculate = bool(
@@ -28,10 +27,30 @@ def render_recalculate_split_forms(data: dict, original_request: dict):
         st.warning("⚠️ No se pueden realizar el recálculo. Faltan datos del request original.")
         return
 
-    st.markdown("**Modifica los datos para forzar un split:**")
+    st.markdown("**Modifica los datos para solicitar un split**")
+
+    col_config = st.columns(1)[0]
+    with col_config:
+        st.markdown("##### ✅ Selección Avanzada de Split")
+        opcion_split = st.radio(
+            "Selecciona el tipo de split",
+            ("Split Inteligente", "Split Manual"),
+            help="Elige entre dejar que el sistema decida o seleccionar un número de tiendas.",
+            key="split_option_radio"
+        )
+
+        forzar_split_rq = None
+        if opcion_split == "Split Manual":
+            forzar_split_rq = st.slider(
+                "Forzar Split entre tiendas",
+                min_value=2,
+                max_value=int(data.get("tiendas_con_inventario", 0)),
+                value=2,
+                help="Número de tiendas a considerar para el split."
+            )
 
     with st.form(key="recalculation_split_form"):
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
 
         with col1:
             st.markdown("##### 📦 Datos del Pedido")
@@ -79,28 +98,9 @@ def render_recalculate_split_forms(data: dict, original_request: dict):
                 help="Temporada comercial que afecta la logística"
             )
 
-
-        with col3:
-            st.markdown("##### ⚙️ Configuración Avanzada")
-            # Checkbox para permitir split
-            permitir_split = st.checkbox(
-                "Permitir Split",
-                value=True,
-                help="Permite dividir la orden en múltiples tiendas si es necesario"
-            )
-
-            forzar_split_rq = st.slider(
-                "Forzar Split entre tiendas",
-                min_value=2,
-                max_value=int(tiendas_inventario),
-                value=2,
-                help="Número de tiendas a considerar para el split."
-
-            )
-
         # Botón de envío del formulario
         submitted = st.form_submit_button(
-            "🔄 Ejecutar cálculo con Split",
+            "🔄 Ejecutar predicción",
             type="primary",
             use_container_width=True
         )
@@ -112,30 +112,28 @@ def render_recalculate_split_forms(data: dict, original_request: dict):
                 return
 
             # Crear el diccionario de datos del request
-            request_data = {
+            payload = {
                 "codigo_postal": codigo_postal_rq,
                 "sku_id": sku_id_rq,
                 "cantidad": cantidad_rq,
-                "fecha_compra_original": fecha_compra_rq.strftime('%Y-%m-%dT%H:%M:%S.%f'),
-                "temporada_original": temporada_rq,
-                "permitir_split": permitir_split,
-                "forzar_split_tiendas": forzar_split_rq
+                "fecha_compra": fecha_compra_rq.strftime('%Y-%m-%dT%H:%M:%S.%f'),
+                "temporada": temporada_rq,
+                "forzar_split_inteligente": opcion_split == "Split Inteligente",
+                "forzar_split_tiendas": forzar_split_rq,
             }
 
-            execute_recalculation_split(request_data, data)
+            execute_split_prediction(payload, data)
 
 
-def execute_recalculation_split(request_data: dict, data: dict):
+def execute_split_prediction(payload: dict, data: dict):
     """
     Ejecuta un recalculo de FEE forzando split entre tiendas
     """
     try:
         # Extraer valores para logging
-        codigo_postal = request_data.get('codigo_postal')
-        sku_id = request_data.get('sku_id')
-        cantidad = request_data.get('cantidad')
-        tienda_rechazada = request_data.get('tienda_rechazada')
-        tipo_impacto = request_data.get('tipo_impacto')
+        codigo_postal = payload.get('codigo_postal')
+        sku_id = payload.get('sku_id')
+        cantidad = payload.get('cantidad')
 
 
         if not codigo_postal or not sku_id:
@@ -149,7 +147,7 @@ def execute_recalculation_split(request_data: dict, data: dict):
             st.write(f"📍 CP: {codigo_postal} | 📦 SKU: {sku_id} | 🔢 Cantidad: {cantidad}")
 
             api_client = APIClient()
-            result, error = api_client.predict_delivery(**request_data)
+            result, error = api_client.predict_delivery(payload)
 
             if result:
                 st.write("✅ Predicción con Split completada exitosamente")
@@ -161,18 +159,18 @@ def execute_recalculation_split(request_data: dict, data: dict):
                 st.rerun()
             else:
                 st.write("❌ Error en la predicción") # TODO: Mapear correctamente el error (inventario insuficiente, etc.)
-                status.update(label="❌ Error en Recállo", state="error", expanded=False)
+                status.update(label="❌ Error en la predicción con split", state="error", expanded=False)
 
                 with result_placeholder.containe():
-                    st.error(f"🚫 **Error en el recálculo:** {error}")
+                    st.error(f"🚫 **Error durante la predicción:** {error}")
 
                     with st.expander("🔍 Detalles del Error", expanded=False):
                         st.write("**Datos enviados:**")
-                        st.json(request_data)
+                        st.json(payload)
                         st.write(f"**Error recibido:** {error}")
 
     except Exception as e:
-        st.error(f"❌ Error inesperado en recálculo: {str(e)}")
+        st.error(f"❌ Error inesperado en la predicción: {str(e)}")
         st.write(f"**Detalles del error:** {str(e)}")
 
         # Mostrar traceback para debugging si es necesario

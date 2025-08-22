@@ -22,7 +22,6 @@ class APIClient:
             forzar_split_tiendas (int): Numero de tiendas a considerar durante el split (OPCIONAL)
             forzar_split_inteligente (bool): Solicitar que el sistema asigne de forma inteligente los splits (OPCIONAL)
 
-
         Returns:
             tuple: (result_data, error_message)
         """

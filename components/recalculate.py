@@ -29,7 +29,7 @@ def render_recalculate_forms(data: dict, original_request: dict):
         st.warning("⚠️ No se pueden realizar recálculos. Faltan datos del request original.")
         return
 
-    st.markdown("**Modifica los datos que se utilizarán para el recálculo:**")
+    st.markdown("**Modifica los datos que se utilizarán para el recálculo**")
 
     with st.form(key="recalculation_form"):
         col1, col2, col3 = st.columns(3)

@@ -5,7 +5,7 @@ import streamlit as st
 from streamlit_calendar import calendar
 
 from components.recalculate import render_recalculate_forms
-from components.recalculate_split import render_recalculate_split_forms
+from components.split_prediction import render_split_forms
 from utils.helpers import format_currency, format_datetime
 from components.bigquery_table import render_bigquery_analysis, get_bigquery_results
 
@@ -33,7 +33,7 @@ def render_results_page():
             render_recalculate_forms(data, original_request)
 
         with tab2:
-            render_recalculate_split_forms(data, original_request)
+            render_split_forms(data, original_request)
         # render_recalculate_forms(data, original_request)
 
 def render_main_results(data: dict, original_request: dict):

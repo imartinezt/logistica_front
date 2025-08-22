@@ -76,8 +76,6 @@ def render_prediction_form():
         fecha_hora_compra = datetime.combine(fecha_compra, hora_compra)
         fecha_str = fecha_hora_compra.strftime("%Y-%m-%dT%H:%M:%S.%f")
 
-
-
         # Creamos el payload para mandar la solicitud al endpoint
         payload = {
             "codigo_postal": codigo_postal,
@@ -86,8 +84,6 @@ def render_prediction_form():
             "temporada": temporada,
             "fecha_compra": fecha_str,
         }
-
-        print(payload)
 
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -139,7 +135,6 @@ def process_prediction(payload: dict):
                 st.rerun()
             else:
                 status.update(label="❌ Ocurrió un error, por favor revisa los detalles.", state="error", expanded=False) # Mensaje de error por defecto
-                print(error)
                 render_error_card(data_error=error)
 
     except Exception as e:
